@@ -1,0 +1,21 @@
+# Eleven — Phase 1 dependencies
+
+# Speech-to-text (local Whisper, faster than openai-whisper)
+faster-whisper
+
+# Audio recording from mic + WAV playback
+sounddevice
+soundfile
+
+# Numerical arrays (required by sounddevice + faster-whisper)
+numpy
+
+# Ollama Python client (chat with qwen3:14b locally)
+ollama
+
+# Kokoro text-to-speech (Hindi + Hinglish female voice)
+kokoro
+
+# Voice Activity Detection — neural model, far more accurate than RMS energy
+# torch is already a transitive dependency of kokoro; silero-vad adds ~2MB ONNX model
+silero-vad
