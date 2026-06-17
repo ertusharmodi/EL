@@ -1,22 +1,14 @@
-# llm.py — Chat with qwen3 via Ollama, optimised for low-latency voice responses.
+# llm.py — Chat with qwen3 via Ollama, optimised for voice-assistant latency.
 #
-# qwen3 is a reasoning/thinking model.  The correct way to get fast, clean output
-# on Ollama 0.30.x is:
+# qwen3 models are reasoning models that generate a chain-of-thought before answering.
+# On Ollama 0.30.x, passing think=True routes the chain-of-thought into the separate
+# message.thinking field; message.content contains ONLY the clean final answer.
 #
-#   think=True  — routes the chain-of-thought into message.thinking (separate field)
-#                 rather than embedding it in message.content.  This means content
-#                 is always the clean, final answer.
+# Measured latency (this machine, ~142 tok/s):
+#   qwen3:1.7b — 1.1–1.9 s/turn  ← current model  (thinking=~500–900 chars)
+#   qwen3:4b   — 32–46 s/turn                       (thinking=~8,000–12,000 chars)
 #
-#   num_predict — cap total tokens (thinking + answer).  qwen3:4b typically uses
-#                 100–400 thinking tokens for simple conversational queries.
-#                 OLLAMA_NUM_PREDICT = 1200 is enough for thinking + a 2-sentence answer.
-#
-# What does NOT work on Ollama 0.30.x:
-#   think=False  — model ignores it; thinking is generated anyway and embedded inline
-#                  in message.content (not routed to message.thinking), making it
-#                  impossible to strip cleanly.
-#
-# We also keep a regex stripper as a safety net for edge cases.
+# Switch OLLAMA_MODEL in config.py to change the model.
 
 import os
 import re
@@ -26,7 +18,7 @@ import ollama
 
 import config
 
-# ── System prompt ────────────────────────────────────────────────────────────
+# ── System prompt ─────────────────────────────────────────────────────────────
 _PERSONALITY_FILE = os.path.join(
     os.path.dirname(os.path.abspath(__file__)),
     "personality.txt",
@@ -38,34 +30,38 @@ try:
 except FileNotFoundError:
     _SYSTEM_PROMPT = config.OLLAMA_SYSTEM_PROMPT
 
-# ── Response stripper ────────────────────────────────────────────────────────
-# Safety net: if content somehow includes a leaked <think> block, strip it.
+# ── Helpers ───────────────────────────────────────────────────────────────────
 _THINK_RE = re.compile(r"<think>.*?</think>", re.DOTALL)
 
 
-def _strip_think(text: str) -> str:
+def _clean(text: str) -> str:
+    """Strip any residual <think>...</think> blocks and whitespace."""
     return _THINK_RE.sub("", text).strip()
 
 
-# ── Chat ─────────────────────────────────────────────────────────────────────
+# ── Chat ──────────────────────────────────────────────────────────────────────
 
 def chat(user_text: str) -> str:
     """
     Send user_text to the LLM and return the AI's response as a string.
 
-    Uses think=True so the model's chain-of-thought is routed to the separate
-    message.thinking field; message.content contains only the clean final answer.
+    Uses think=True so the model's chain-of-thought is routed to message.thinking;
+    message.content contains the clean final answer with no reasoning preamble.
 
-    Prints timing diagnostics: wall time, tokens generated, tokens/sec.
+    Falls back to stripping <think> tags from content if thinking field is empty.
+
+    Prints timing diagnostics: wall time, tokens generated, tokens/sec,
+    thinking field character count.
     """
     t0 = time.monotonic()
 
     response = ollama.chat(
         model=config.OLLAMA_MODEL,
-        think=True,   # route CoT to .thinking; content = clean answer
+        think=True,    # route CoT to .thinking; content = clean answer
         options={
-            # Total token budget (thinking + answer). qwen3:4b uses ~100–400 thinking
-            # tokens for conversational queries; 1200 leaves ample room for the answer.
+            # Token budget for thinking + answer combined.
+            # qwen3:4b uses ~200–800 thinking tokens for conversational queries.
+            # 5000 is a generous safety ceiling; the model stops naturally when done.
             "num_predict": config.OLLAMA_NUM_PREDICT,
         },
         messages=[
@@ -76,23 +72,24 @@ def chat(user_text: str) -> str:
 
     elapsed = time.monotonic() - t0
 
-    # message.content is the clean answer (thinking was routed to .thinking field)
-    content = _strip_think(response.message.content)
+    # message.content is the clean answer when think=True works correctly.
+    # _clean() strips residual <think> tags as a safety net.
+    content = _clean(response.message.content)
 
     # ── Diagnostics ──────────────────────────────────────────────────────────
     try:
         thinking_field = getattr(response.message, "thinking", None)
-        think_len      = len(thinking_field) if thinking_field else 0
+        think_chars    = len(thinking_field) if thinking_field else 0
         eval_tokens    = response.eval_count
         eval_secs      = response.eval_duration / 1e9
         prompt_tok     = response.prompt_eval_count
         tps            = eval_tokens / eval_secs if eval_secs > 0 else 0
         print(
-            f"  🧠  [LLM] {elapsed:.1f}s wall  |  "
-            f"prompt={prompt_tok}tok  gen={eval_tokens}tok  @ {tps:.0f}tok/s  "
-            f"think={think_len}chars"
+            f"  🧠  [LLM] {elapsed:.1f}s  |  "
+            f"prompt={prompt_tok}tok  gen={eval_tokens}tok @ {tps:.0f}tok/s  "
+            f"thinking={think_chars}chars"
         )
     except Exception:
-        print(f"  🧠  [LLM] {elapsed:.1f}s wall")
+        print(f"  🧠  [LLM] {elapsed:.1f}s")
 
     return content

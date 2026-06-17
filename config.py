@@ -86,25 +86,20 @@ WHISPER_NO_SPEECH_THRESHOLD = 0.6
 SILENCE_THRESHOLD = 0.01
 
 # ── LLM (Ollama) ───────────────────────────────────────────────────
-OLLAMA_MODEL = "qwen3:4b"  # Optimal: fast enough for voice, good Hinglish quality.
-                            # Alternatives: qwen3:1.7b (fastest), qwen3:14b (best quality).
+OLLAMA_MODEL = "qwen3:1.7b"  # Fastest qwen3 model with good Hinglish quality.
+                             # qwen3:4b generates 2,200–3,200 thinking tokens per query (~44s).
+                             # qwen3:1.7b generates ~500–800 thinking tokens (~10s).
+                             # Switch back to qwen3:4b for better quality if latency is acceptable.
 
-# qwen3 is a reasoning/thinking model. By default it generates a hidden chain-of-thought
-# (hundreds of tokens) before the visible response, adding 15–20s of latency per turn.
+# qwen3 is a reasoning/thinking model.  llm.py uses streaming + </think> boundary
+# detection to separate reasoning from the final answer in a version-agnostic way.
 #
-# On Ollama 0.30.x the correct approach is think=True:
-#   • think=True  — routes chain-of-thought into message.thinking (separate field);
-#                   message.content contains ONLY the clean final answer.
-#   • think=False — does NOT work on 0.30.x: model ignores it and embeds thinking
-#                   inline in message.content, making it impossible to strip cleanly.
-# llm.py passes think=True so content is always the clean answer.
-OLLAMA_THINK = True
+# OLLAMA_NUM_PREDICT is the max total tokens streamed (thinking + answer).
+# With streaming, we break as soon as the answer is captured, so this is just
+# a safety ceiling.  5000 is enough for any conversational reply even with heavy
+# chain-of-thought; set lower (e.g. 2000) if you want a stricter time cap.
+OLLAMA_NUM_PREDICT = 5000
 
-# Total token budget (thinking tokens + answer tokens).
-# qwen3:4b uses ~100–400 thinking tokens for short conversational queries.
-# 1200 provides enough room for thinking to finish + a 2-sentence answer.
-# Increase if responses are being cut off; decrease only if latency is too high.
-OLLAMA_NUM_PREDICT = 1200
 
 # Fallback system prompt used if personality.txt cannot be found.
 # The primary personality is defined in personality.txt — edit that file instead.
