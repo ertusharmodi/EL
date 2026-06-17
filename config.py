@@ -91,14 +91,20 @@ OLLAMA_MODEL = "qwen3:4b"  # Optimal: fast enough for voice, good Hinglish quali
 
 # qwen3 is a reasoning/thinking model. By default it generates a hidden chain-of-thought
 # (hundreds of tokens) before the visible response, adding 15–20s of latency per turn.
-# Setting OLLAMA_THINK = False disables this. The Python client passes this to Ollama;
-# llm.py also injects /no_think into the system prompt as a belt-and-suspenders fallback.
-OLLAMA_THINK = False
+#
+# On Ollama 0.30.x the correct approach is think=True:
+#   • think=True  — routes chain-of-thought into message.thinking (separate field);
+#                   message.content contains ONLY the clean final answer.
+#   • think=False — does NOT work on 0.30.x: model ignores it and embeds thinking
+#                   inline in message.content, making it impossible to strip cleanly.
+# llm.py passes think=True so content is always the clean answer.
+OLLAMA_THINK = True
 
-# Hard cap on tokens generated per response. For a 1–2 sentence conversational reply,
-# 120 tokens is generous. This prevents runaway generation if thinking mode is not
-# fully suppressed and also keeps latency predictable.
-OLLAMA_NUM_PREDICT = 120
+# Total token budget (thinking tokens + answer tokens).
+# qwen3:4b uses ~100–400 thinking tokens for short conversational queries.
+# 1200 provides enough room for thinking to finish + a 2-sentence answer.
+# Increase if responses are being cut off; decrease only if latency is too high.
+OLLAMA_NUM_PREDICT = 1200
 
 # Fallback system prompt used if personality.txt cannot be found.
 # The primary personality is defined in personality.txt — edit that file instead.

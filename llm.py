@@ -1,11 +1,22 @@
 # llm.py — Chat with qwen3 via Ollama, optimised for low-latency voice responses.
 #
-# qwen3 is a reasoning model: by default it generates a hidden chain-of-thought
-# that adds 15–20 s of latency per turn.  We suppress it three ways:
-#   1. think=False  — Ollama API flag (requires Ollama ≥ 0.9.0 / 0.30.x)
-#   2. /no_think    — appended to system prompt as model-level instruction
-#   3. num_predict  — hard token cap so CoT can't run away even if (1) is ignored
-#   4. Strip        — regex removes any residual <think>...</think> from content
+# qwen3 is a reasoning/thinking model.  The correct way to get fast, clean output
+# on Ollama 0.30.x is:
+#
+#   think=True  — routes the chain-of-thought into message.thinking (separate field)
+#                 rather than embedding it in message.content.  This means content
+#                 is always the clean, final answer.
+#
+#   num_predict — cap total tokens (thinking + answer).  qwen3:4b typically uses
+#                 100–400 thinking tokens for simple conversational queries.
+#                 OLLAMA_NUM_PREDICT = 1200 is enough for thinking + a 2-sentence answer.
+#
+# What does NOT work on Ollama 0.30.x:
+#   think=False  — model ignores it; thinking is generated anyway and embedded inline
+#                  in message.content (not routed to message.thinking), making it
+#                  impossible to strip cleanly.
+#
+# We also keep a regex stripper as a safety net for edge cases.
 
 import os
 import re
@@ -27,18 +38,12 @@ try:
 except FileNotFoundError:
     _SYSTEM_PROMPT = config.OLLAMA_SYSTEM_PROMPT
 
-# Append /no_think as a belt-and-suspenders measure.
-# This is a model-level instruction that works even when the Ollama server
-# does not propagate the think=False API flag correctly.
-if not _SYSTEM_PROMPT.endswith("/no_think"):
-    _SYSTEM_PROMPT = _SYSTEM_PROMPT + "\n\n/no_think"
-
 # ── Response stripper ────────────────────────────────────────────────────────
+# Safety net: if content somehow includes a leaked <think> block, strip it.
 _THINK_RE = re.compile(r"<think>.*?</think>", re.DOTALL)
 
 
 def _strip_think(text: str) -> str:
-    """Remove any <think>...</think> blocks left in the content field."""
     return _THINK_RE.sub("", text).strip()
 
 
@@ -48,9 +53,8 @@ def chat(user_text: str) -> str:
     """
     Send user_text to the LLM and return the AI's response as a string.
 
-    Uses a non-streaming, single-turn call (no conversation history).
-    Chain-of-thought reasoning is suppressed via three mechanisms; see module
-    docstring for details.
+    Uses think=True so the model's chain-of-thought is routed to the separate
+    message.thinking field; message.content contains only the clean final answer.
 
     Prints timing diagnostics: wall time, tokens generated, tokens/sec.
     """
@@ -58,9 +62,11 @@ def chat(user_text: str) -> str:
 
     response = ollama.chat(
         model=config.OLLAMA_MODEL,
-        think=config.OLLAMA_THINK,          # API-level suppression
+        think=True,   # route CoT to .thinking; content = clean answer
         options={
-            "num_predict": config.OLLAMA_NUM_PREDICT,   # hard token cap
+            # Total token budget (thinking + answer). qwen3:4b uses ~100–400 thinking
+            # tokens for conversational queries; 1200 leaves ample room for the answer.
+            "num_predict": config.OLLAMA_NUM_PREDICT,
         },
         messages=[
             {"role": "system", "content": _SYSTEM_PROMPT},
@@ -70,19 +76,21 @@ def chat(user_text: str) -> str:
 
     elapsed = time.monotonic() - t0
 
-    # Strip residual <think> blocks (safety net for older Ollama builds)
+    # message.content is the clean answer (thinking was routed to .thinking field)
     content = _strip_think(response.message.content)
 
     # ── Diagnostics ──────────────────────────────────────────────────────────
     try:
-        eval_tokens = response.eval_count
-        eval_secs   = response.eval_duration / 1e9
-        prompt_tok  = response.prompt_eval_count
-        tps         = eval_tokens / eval_secs if eval_secs > 0 else 0
+        thinking_field = getattr(response.message, "thinking", None)
+        think_len      = len(thinking_field) if thinking_field else 0
+        eval_tokens    = response.eval_count
+        eval_secs      = response.eval_duration / 1e9
+        prompt_tok     = response.prompt_eval_count
+        tps            = eval_tokens / eval_secs if eval_secs > 0 else 0
         print(
             f"  🧠  [LLM] {elapsed:.1f}s wall  |  "
-            f"prompt={prompt_tok}tok  gen={eval_tokens}tok  "
-            f"@ {tps:.0f}tok/s"
+            f"prompt={prompt_tok}tok  gen={eval_tokens}tok  @ {tps:.0f}tok/s  "
+            f"think={think_len}chars"
         )
     except Exception:
         print(f"  🧠  [LLM] {elapsed:.1f}s wall")
