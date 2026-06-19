@@ -3,10 +3,13 @@
 
 import os
 
-# Absolute path to the project root (directory containing this file).
-# All relative paths are derived from here so the project works
-# regardless of the current working directory when python is invoked.
+from dotenv import load_dotenv
+
+# Load .env from the project root before anything else reads env vars.
 _HERE = os.path.dirname(os.path.abspath(__file__))
+load_dotenv(dotenv_path=os.path.join(_HERE, ".env"))
+
+# Absolute path to the project root — already set above (before dotenv import).
 
 # ── Audio ──────────────────────────────────────────────────────────────────
 SAMPLE_RATE = 16000        # Hz — 16kHz is what Whisper expects
@@ -110,12 +113,41 @@ OLLAMA_SYSTEM_PROMPT = (
     "Do not use Devanagari, bullet points, markdown, or special characters."
 )
 
-# ── Text-to-Speech (Kokoro) ─────────────────────────────────────────
-KOKORO_VOICE = "hf_alpha"  # Female Hindi voice. Also try: hf_beta
-KOKORO_LANG  = "a"         # 'a' = American English phonemizer — correct for Latin-script Hinglish.
-                           # 'h' (Hindi) generates garbage phonemes (Q/Y) for English words,
-                           # causing Kokoro to output only 0.5s of audio regardless of text length.
-KOKORO_SAMPLE_RATE = 24000 # Hz — fixed by the Kokoro model
+# ── Text-to-Speech (ElevenLabs) ────────────────────────────────────────────
+# Credentials are read from the .env file at startup (see load_dotenv above).
+# They can be overridden at runtime by setting environment variables with the
+# same names.
+#
+# ELEVENLABS_API_KEY  — your secret key from elevenlabs.io/app/settings/api-keys
+# ELEVENLABS_VOICE_ID — the voice to use; default is "Rachel" (multilingual).
+#                       Browse voices at elevenlabs.io/voice-lab or via the API:
+#                       python -c "from elevenlabs.client import ElevenLabs; \
+#                                  c=ElevenLabs(); [print(v.voice_id, v.name) for v in c.voices.get_all().voices]"
+
+ELEVENLABS_API_KEY  = os.getenv("ELEVENLABS_API_KEY",  "")   # override via .env
+ELEVENLABS_VOICE_ID = os.getenv("ELEVENLABS_VOICE_ID", "JBFqnCBsd6RMkjVDRZzb")  # "George" — deep, clear, premade (free tier)
+# Other free premade voice IDs to try:
+#   JBFqnCBsd6RMkjVDRZzb  George    — deep, clear
+#   IKne3meq5aSn9XLyUdCD  Charlie   — casual, conversational
+#   XB0fDUnXU5powFXDhCwa  Charlotte — warm, female
+#   pFZP5JQG7iQjIQuC4Bku  Lily      — bright, female
+# Library voices (Rachel, Adam, Josh, etc.) require Starter tier or above.
+
+# Model options (fastest → highest quality):
+#   eleven_flash_v2_5   — fastest, lowest latency (~300ms TTFB)
+#   eleven_turbo_v2_5   — good balance of speed and quality
+#   eleven_multilingual_v2 — highest quality, supports 29 languages
+ELEVENLABS_MODEL_ID = "eleven_flash_v2_5"
+
+# PCM output format — no lossy codec, no decoding step needed.
+# Supported: pcm_16000, pcm_22050, pcm_24000, pcm_44100
+# Note: pcm_44100 requires Pro tier or above. pcm_24000 works on all tiers.
+ELEVENLABS_OUTPUT_FORMAT = "pcm_24000"
+
+# ── Legacy Text-to-Speech (Kokoro) — attributes kept so main.py banner compiles
+KOKORO_VOICE = "hf_alpha"   # no longer used; ElevenLabs is the active TTS
+KOKORO_LANG  = "a"          # no longer used
+KOKORO_SAMPLE_RATE = 24000  # no longer used
 
 # ── Temp files ─────────────────────────────────────────────────────────────
 # Stored inside the project directory (not /tmp) to avoid macOS Spotlight

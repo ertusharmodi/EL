@@ -1,61 +1,132 @@
-# tts.py — Text-to-speech using Kokoro.
-# Replaces the Piper subprocess approach with a direct Python API call.
-# The pipeline is loaded lazily on the first call to speak() — no startup cost.
+# tts.py — Text-to-speech using ElevenLabs.
+# Replaces the Kokoro pipeline with a call to the ElevenLabs REST API
+# via the official Python SDK.  The public function signature is unchanged:
+#
+#   speak(text: str, output_path: str = config.RESPONSE_WAV) -> str
+#
+# ElevenLabs returns raw PCM audio (no WAV header).  We wrap it with a
+# standard WAV header using the `wave` module so that soundfile / sounddevice
+# in audio.py can read it without any modification.
 
+import os
+import struct
+import wave
 from typing import Optional
 
-import numpy as np
-import soundfile as sf
+from dotenv import load_dotenv
+from elevenlabs.client import ElevenLabs
 
 import config
 
-# Pipeline is initialised on first use, not at import time.
-_pipeline = None
+# ── Load .env once at import time ──────────────────────────────────────────
+# dotenv does not overwrite variables that are already in the environment,
+# so running with a real env var set will always take precedence.
+load_dotenv(dotenv_path=os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env"))
+
+# ── ElevenLabs client singleton ────────────────────────────────────────────
+# Initialised lazily on first call to speak() — no cost at import time.
+_client: Optional[ElevenLabs] = None
 
 
-def _get_pipeline():
-    """Return the shared KPipeline, loading it on first call."""
-    global _pipeline
-    if _pipeline is None:
-        print(f"  ⏳  Loading Kokoro voice model ({config.KOKORO_VOICE})...")
-        from kokoro import KPipeline
-        _pipeline = KPipeline(lang_code=config.KOKORO_LANG)
-        print("  ✅  Kokoro ready.")
-    return _pipeline
+def _get_client() -> ElevenLabs:
+    """Return the shared ElevenLabs client, creating it on first call."""
+    global _client
+    if _client is None:
+        api_key = os.getenv("ELEVENLABS_API_KEY") or config.ELEVENLABS_API_KEY
+        if not api_key:
+            raise RuntimeError(
+                "ElevenLabs API key not found.  "
+                "Set ELEVENLABS_API_KEY in .env or as an environment variable."
+            )
+        _client = ElevenLabs(api_key=api_key)
+        print("  ✅  ElevenLabs client ready.")
+    return _client
+
+
+def _pcm_to_wav(pcm_bytes: bytes, sample_rate: int, num_channels: int = 1, sample_width: int = 2) -> bytes:
+    """
+    Wrap raw signed-16-bit PCM bytes in a RIFF/WAV container.
+
+    Parameters
+    ----------
+    pcm_bytes    : raw PCM audio (little-endian, signed 16-bit)
+    sample_rate  : e.g. 44100, 24000, 16000
+    num_channels : 1 = mono, 2 = stereo
+    sample_width : bytes per sample (2 for int16)
+
+    Returns
+    -------
+    Complete WAV file as bytes, ready to write to disk.
+    """
+    import io
+    buf = io.BytesIO()
+    with wave.open(buf, "wb") as wf:
+        wf.setnchannels(num_channels)
+        wf.setsampwidth(sample_width)
+        wf.setframerate(sample_rate)
+        wf.writeframes(pcm_bytes)
+    return buf.getvalue()
 
 
 def speak(text: str, output_path: str = config.RESPONSE_WAV) -> str:
     """
-    Convert text to speech using Kokoro and save to output_path as a WAV file.
+    Convert *text* to speech using ElevenLabs and save to *output_path* as WAV.
 
-    KPipeline returns an iterator of (graphemes, phonemes, audio) tuples.
-    Audio chunks are float32 at 24 kHz. They are concatenated and written as
-    a 32-bit float WAV so audio.play() can read them without conversion.
+    The ElevenLabs API returns raw PCM audio (pcm_44100 format by default).
+    We collect all chunks, wrap them in a WAV header, and write the result so
+    that audio.play() — which uses soundfile — can read the file unchanged.
 
     Returns the output path.
     """
-    pipeline = _get_pipeline()
+    client = _get_client()
 
-    print(f"  \U0001f4dd  TTS input: {len(text)} chars \u2014 \"{text[:80]}{'...' if len(text) > 80 else ''}\"")
+    voice_id  = os.getenv("ELEVENLABS_VOICE_ID") or config.ELEVENLABS_VOICE_ID
+    model_id  = config.ELEVENLABS_MODEL_ID
+    fmt       = config.ELEVENLABS_OUTPUT_FORMAT   # e.g. "pcm_44100"
+    # Derive sample rate from the format string ("pcm_44100" → 44100)
+    sample_rate = int(fmt.split("_")[1])
 
-    chunks = []
-    for i, (_graphemes, _phonemes, audio_chunk) in enumerate(pipeline(
-        text,
-        voice=config.KOKORO_VOICE,
-    )):
-        duration = len(audio_chunk) / 24000
-        print(f"  \U0001f509  Chunk {i+1}: {len(audio_chunk)} samples / {duration:.2f}s")
-        chunks.append(audio_chunk)
+    print(
+        f"  📝  TTS input: {len(text)} chars — "
+        f"\"{text[:80]}{'...' if len(text) > 80 else ''}\""
+    )
+    print(f"  🔊  ElevenLabs → voice={voice_id}  model={model_id}  fmt={fmt}")
+
+    # Stream audio from ElevenLabs
+    audio_stream = client.text_to_speech.convert(
+        text=text,
+        voice_id=voice_id,
+        model_id=model_id,
+        output_format=fmt,
+    )
+
+    # Collect PCM chunks
+    chunks: list[bytes] = []
+    total_bytes = 0
+    for chunk in audio_stream:
+        if chunk:
+            chunks.append(chunk)
+            total_bytes += len(chunk)
 
     if not chunks:
-        # Fallback: 500ms of silence so audio.play() never receives a broken file.
-        print("  \u26a0\ufe0f   No chunks generated \u2014 using silence fallback.")
-        chunks = [np.zeros(int(0.5 * 24000), dtype=np.float32)]
+        # Fallback: 500ms of silence (int16 zeros) so audio.play() never
+        # receives a broken file.
+        print("  ⚠️   No audio received — using silence fallback.")
+        silence_samples = int(0.5 * sample_rate)
+        chunks = [b"\x00\x00" * silence_samples]
+        total_bytes = len(chunks[0])
 
-    audio_data = np.concatenate(chunks)
-    total_duration = len(audio_data) / 24000
-    print(f"  \U0001f4ca  Total: {len(chunks)} chunk(s) \u00b7 {len(audio_data)} samples \u00b7 {total_duration:.2f}s @ 24000 Hz")
+    pcm_bytes = b"".join(chunks)
+    duration  = total_bytes / (sample_rate * 2)   # 2 bytes per int16 sample
+    print(
+        f"  📊  Total: {len(chunks)} chunk(s) · {total_bytes:,} bytes "
+        f"· {duration:.2f}s @ {sample_rate} Hz"
+    )
 
-    # Write as 32-bit float — no int16 conversion; audio.play() reads float32.
-    sf.write(output_path, audio_data, 24000, subtype="FLOAT")
+    # Wrap in WAV container and write
+    wav_bytes = _pcm_to_wav(pcm_bytes, sample_rate=sample_rate)
+    with open(output_path, "wb") as fh:
+        fh.write(wav_bytes)
+
+    print(f"  ✅  Saved WAV → {output_path}")
     return output_path

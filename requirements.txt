@@ -13,9 +13,12 @@ numpy
 # Ollama Python client (chat with qwen3:14b locally)
 ollama
 
-# Kokoro text-to-speech (Hindi + Hinglish female voice)
-kokoro
+# ElevenLabs text-to-speech (replaces Kokoro)
+elevenlabs
+
+# Load .env credentials (ELEVENLABS_API_KEY, ELEVENLABS_VOICE_ID)
+python-dotenv
 
 # Voice Activity Detection — neural model, far more accurate than RMS energy
-# torch is already a transitive dependency of kokoro; silero-vad adds ~2MB ONNX model
+# torch is already a transitive dependency of silero-vad
 silero-vad
