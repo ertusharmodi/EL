@@ -17,18 +17,48 @@ import time
 import ollama
 
 import config
+import memory
 
-# ── System prompt ─────────────────────────────────────────────────────────────
+# ── System prompt ─────────────────────────────────────────────────────────────────
 _PERSONALITY_FILE = os.path.join(
     os.path.dirname(os.path.abspath(__file__)),
     "personality.txt",
 )
 
-try:
-    with open(_PERSONALITY_FILE, "r", encoding="utf-8") as _f:
-        _SYSTEM_PROMPT = _f.read().strip()
-except FileNotFoundError:
-    _SYSTEM_PROMPT = config.OLLAMA_SYSTEM_PROMPT
+
+def _build_system_prompt() -> str:
+    """
+    Assemble the full system prompt for every LLM call.
+
+    Structure:
+        1. personality.txt  — base character, tone, rules (or fallback string)
+        2. USER PROFILE     — flat key/value block rendered from memory.get_profile()
+
+    The profile block is omitted silently if profile.json is missing or empty.
+    """
+    # 1. Load base personality.
+    try:
+        with open(_PERSONALITY_FILE, "r", encoding="utf-8") as fh:
+            base = fh.read().strip()
+    except FileNotFoundError:
+        base = config.OLLAMA_SYSTEM_PROMPT
+
+    # 2. Append user profile block if available.
+    profile = memory.get_profile()
+    if not profile:
+        return base
+
+    lines = [f"{key}: {value}" for key, value in profile.items()]
+    profile_block = (
+        "\n\n── USER PROFILE ─────────────────────────────────────────────────────────────────"
+        "\nThese are facts about the user. Use them naturally when relevant."
+        "\nDo not recite this list unprompted."
+        f"\n" + "\n".join(lines)
+    )
+    return base + profile_block
+
+
+_SYSTEM_PROMPT = _build_system_prompt()
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 _THINK_RE = re.compile(r"<think>.*?</think>", re.DOTALL)
@@ -62,10 +92,18 @@ def chat(user_text: str) -> str:
             # Token budget for thinking + answer combined.
             # qwen3:4b uses ~200–800 thinking tokens for conversational queries.
             # 5000 is a generous safety ceiling; the model stops naturally when done.
-            "num_predict": config.OLLAMA_NUM_PREDICT,
+            "num_predict":   config.OLLAMA_NUM_PREDICT,
+            # Penalise repeating tokens already in the context window.
+            # 1.0 = no penalty; 1.3 = strong enough to break repetition loops
+            # without degrading coherence. Critical for qwen3:1.7b on short context.
+            "repeat_penalty": config.OLLAMA_REPEAT_PENALTY,
+            # Explicit temperature — ensures sampling diversity even with think=True.
+            # 0.8 is a good balance: natural-sounding without hallucinating.
+            "temperature":   config.OLLAMA_TEMPERATURE,
         },
         messages=[
             {"role": "system", "content": _SYSTEM_PROMPT},
+            *memory.get_history(),   # last N turns injected here
             {"role": "user",   "content": user_text},
         ],
     )
@@ -75,6 +113,9 @@ def chat(user_text: str) -> str:
     # message.content is the clean answer when think=True works correctly.
     # _clean() strips residual <think> tags as a safety net.
     content = _clean(response.message.content)
+
+    # Persist this turn to short-term memory.
+    memory.add_turn(user_text, content)
 
     # ── Diagnostics ──────────────────────────────────────────────────────────
     try:

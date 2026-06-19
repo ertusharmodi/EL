@@ -1,4 +1,11 @@
 # stt.py — Speech-to-text using Faster-Whisper.
+#
+# Key design choices:
+#   - Language forced to "en" so Hinglish is always romanised to Latin script.
+#   - initial_prompt biases the vocabulary toward known words/names.
+#   - condition_on_previous_text=False prevents hallucination drift across segments.
+#   - Per-segment confidence is logged so low-quality transcriptions are visible.
+#   - A low-confidence warning is printed when any segment falls below the threshold.
 
 import warnings
 from typing import Optional
@@ -71,24 +78,71 @@ def transcribe(wav_path: str) -> str:
     Returns the spoken text as a stripped string.
     Returns an empty string if the recording is silent (RMS below threshold)
     or if Whisper's internal no-speech probability exceeds the configured threshold.
+
+    Confidence logging:
+        Per-segment avg_logprob and no_speech_prob are printed for every segment.
+        A ⚠️ warning is printed when a segment's confidence falls below
+        WHISPER_SEGMENT_CONFIDENCE_THRESHOLD so questionable transcriptions
+        are visible in the terminal before they reach the LLM.
     """
     if _is_silent(wav_path):
         return ""
 
     model = _get_model()
-    segments, info = model.transcribe(
+    segments_gen, info = model.transcribe(
         wav_path,
         beam_size=5,
         language=config.WHISPER_LANGUAGE,
         initial_prompt=config.WHISPER_INITIAL_PROMPT,
-        condition_on_previous_text=False,       # No history in a single-turn system
+        condition_on_previous_text=False,   # prevents hallucination drift across segments
         no_speech_threshold=config.WHISPER_NO_SPEECH_THRESHOLD,
+        log_prob_threshold=config.WHISPER_LOG_PROB_THRESHOLD,  # drop very low-prob segments
+        vad_filter=True,                    # built-in VAD removes silent padding before decoding
+        vad_parameters=dict(
+            min_silence_duration_ms=300,    # ms of silence to split segments
+        ),
     )
-    text = " ".join(segment.text for segment in segments).strip()
 
-    # Show transcription confidence. Language is fixed to WHISPER_LANGUAGE
-    # so language_probability reflects how confidently Whisper decoded this
-    # clip in that language (useful for catching very low-quality recordings).
-    print(f"  🎯  Transcribed ({info.language_probability:.0%} confidence)")
+    # Materialise the generator so we can inspect each segment.
+    segments = list(segments_gen)
+
+    parts = []
+    low_confidence_flags = []
+
+    for i, seg in enumerate(segments):
+        seg_text = seg.text.strip()
+        if not seg_text:
+            continue
+
+        # avg_logprob is log-probability of the segment tokens (higher = more confident).
+        # Convert to a 0–1 confidence score for display: exp(avg_logprob).
+        seg_conf = float(min(1.0, max(0.0, 2 ** seg.avg_logprob)))  # log2 → probability
+        is_low = seg_conf < config.WHISPER_SEGMENT_CONFIDENCE_THRESHOLD
+
+        print(
+            f"  🎙  Segment {i+1}: conf={seg_conf:.0%}  "
+            f"no_speech={seg.no_speech_prob:.2f}  "
+            f"{'⚠️  LOW CONFIDENCE' if is_low else ''}  "
+            f"\"{seg_text}\""
+        )
+
+        if is_low:
+            low_confidence_flags.append(seg_text)
+
+        parts.append(seg_text)
+
+    text = " ".join(parts).strip()
+
+    # Summary line: overall language confidence + low-confidence warning
+    lang_conf = info.language_probability
+    if low_confidence_flags:
+        print(
+            f"  ⚠️   Low-confidence segment(s) detected — "
+            f"transcription may contain errors. "
+            f"Flagged: {low_confidence_flags}"
+        )
+        print(f"  🎯  Transcribed ({lang_conf:.0%} language confidence) [REVIEW ADVISED]")
+    else:
+        print(f"  🎯  Transcribed ({lang_conf:.0%} language confidence)")
 
     return text

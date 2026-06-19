@@ -72,16 +72,35 @@ WHISPER_LANGUAGE = "en"
 # Vocabulary biasing via initial_prompt.
 # Whisper uses this as a fake "previous transcript" to prime the decoder.
 # Words that appear here are recognised at higher confidence.
-# Edit freely — add any names, tools, or domain terms you use regularly.
+#
+# IMPORTANT: Include common words you say frequently that Whisper mishears.
+# The "age" → "AIDS" error happens because both sound identical to Whisper's
+# acoustic model without context. Adding "age", "name", "date" here biases
+# the decoder strongly toward the correct word in short ambiguous utterances.
 WHISPER_INITIAL_PROMPT = (
-    "My name is Tushar. I use PHP, Laravel, and Python for development. "
-    "I'm talking to Eleven, my AI assistant."
+    "My name is Tushar. I use PHP, Laravel, Python, and Go for development. "
+    "I'm talking to Eleven, my AI companion. "
+    "Common words I say: age, name, date, rate, weight, wait, eight, "
+    "great, late, state, okay, day, way, play, say, pay, stay. "
+    "I speak English and Hinglish."
 )
 
 # Whisper's internal no-speech gate. If the model's own no-speech probability
 # exceeds this value, it returns an empty result rather than hallucinating.
 # Works alongside the RMS energy check as a second layer of silence rejection.
 WHISPER_NO_SPEECH_THRESHOLD = 0.6
+
+# Drop segments where the average log-probability is below this threshold.
+# -1.0 = drop very low quality segments (likely noise/hallucination).
+# -0.5 = stricter; may drop valid low-energy speech.
+# Set to None to disable (accept all segments regardless of quality).
+WHISPER_LOG_PROB_THRESHOLD = -1.0
+
+# Per-segment confidence threshold for the low-confidence warning flag.
+# Segments below this value print a ⚠️ warning — the text is still used
+# but the operator knows to treat it with caution.
+# Range: 0.0–1.0. 0.6 = flag anything below 60% confidence.
+WHISPER_SEGMENT_CONFIDENCE_THRESHOLD = 0.6
 
 # RMS energy below this value is treated as silence and skipped.
 # Range: float32 normalised audio (0.0 – 1.0). 0.01 ≈ –40 dBFS,
@@ -102,6 +121,15 @@ OLLAMA_MODEL = "qwen3:1.7b"  # Fastest qwen3 model with good Hinglish quality.
 # a safety ceiling.  5000 is enough for any conversational reply even with heavy
 # chain-of-thought; set lower (e.g. 2000) if you want a stricter time cap.
 OLLAMA_NUM_PREDICT = 5000
+
+# Penalise token repetition. 1.0 = off; 1.3 = strong but safe.
+# Prevents qwen3:1.7b from getting stuck in a repetition loop when
+# the conversation history contains a repeated response.
+OLLAMA_REPEAT_PENALTY = 1.3
+
+# Sampling temperature. 0.8 = natural diversity without hallucination.
+# Setting explicitly prevents Ollama's default from varying across versions.
+OLLAMA_TEMPERATURE = 0.8
 
 
 # Fallback system prompt used if personality.txt cannot be found.
@@ -148,6 +176,16 @@ ELEVENLABS_OUTPUT_FORMAT = "pcm_24000"
 KOKORO_VOICE = "hf_alpha"   # no longer used; ElevenLabs is the active TTS
 KOKORO_LANG  = "a"          # no longer used
 KOKORO_SAMPLE_RATE = 24000  # no longer used
+
+# ── Memory ─────────────────────────────────────────────────────────────────────
+MEMORY_DIR             = os.path.join(_HERE, "memory")
+MEMORY_SHORT_TERM_FILE = os.path.join(MEMORY_DIR, "short_term.json")
+MEMORY_PROFILE_FILE    = os.path.join(MEMORY_DIR, "profile.json")   # stub for Phase 3
+
+# Number of conversation turns to keep in short-term memory.
+# Each turn = 1 user message + 1 assistant message = 2 JSON entries.
+# 20 turns ≈ 400–1200 extra tokens — well within qwen3:1.7b's 32k context.
+MEMORY_SHORT_TERM_TURNS = 20
 
 # ── Temp files ─────────────────────────────────────────────────────────────
 # Stored inside the project directory (not /tmp) to avoid macOS Spotlight

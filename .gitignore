@@ -1,3 +1,4 @@
 tmp/
 .venv
 .env
+memory/
