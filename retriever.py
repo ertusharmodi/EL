@@ -28,12 +28,8 @@ def retrieve_direct_answer(user_message: str) -> Optional[str]:
 
     # ── 2. Hardcoded conversational answers ────────────────────────────────
     hardcoded = {
-        "who are you": "I'm Eleven.",
         "what are you doing": "Just talking with you.",
-        "okay": "Alright.",
-        "thanks": "You're welcome.",
-        "thank you": "You're welcome.",
-        "good morning": "Good morning."
+        "okay": "Alright."
     }
     if clean_msg in hardcoded:
         print("🧠 Memory Match Found")

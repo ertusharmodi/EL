@@ -61,22 +61,22 @@ def main():
     print("─" * 50)
 
     # ── Session state ─────────────────────────────────────────────────────────
-    follow_up_mode   = False
+    session_mode   = False
     last_interaction = 0.0    # monotonic timestamp of last LLM response
-    FOLLOW_UP_TIMEOUT = 60.0
-    EXIT_COMMANDS = {"goodbye", "bye", "stop listening", "sleep", "go to sleep"}
+    SESSION_TIMEOUT = 60.0
 
     while True:
         try:
             now = time.monotonic()
 
             # ── Check session timeout ─────────────────────────────────────────
-            if follow_up_mode and (now - last_interaction) >= FOLLOW_UP_TIMEOUT:
-                follow_up_mode = False
-                print("🔴 Follow-up mode expired")
+            if session_mode and (now - last_interaction) >= SESSION_TIMEOUT:
+                session_mode = False
+                print("🔴 Session expired")
+                print("😴 Sleep mode")
 
-            # ── SLEEP: listen for wake word ───────────────────────────────────
-            if not follow_up_mode:
+            # ── SLEEPING: listen for wake word ────────────────────────────────
+            if not session_mode:
                 print("👂 Waiting for wake word")
                 wav_in = audio.record_vad()
 
@@ -99,10 +99,10 @@ def main():
                     print(f"  ✗   [Wake] No match — still sleeping.")
                     continue
 
-                follow_up_mode   = True
+                session_mode   = True
                 last_interaction = time.monotonic()
                 print(f"  ✅  [Wake] WAKE DETECTED — matched '{matched_phrase}'")
-                print("🟢 Follow-up mode enabled")
+                print("🟢 Session started")
 
                 # Inline prompt: user spoke prompt in same breath as wake phrase.
                 inline_text = wake_clean[len(matched_phrase):].strip()
@@ -136,26 +136,50 @@ def main():
 
             # ── AWAKE: any speech goes directly to LLM ────────────────────────
             else:
+                t0 = time.monotonic()
                 wav_in = audio.record_vad()
+                t_rec = time.monotonic() - t0
+
+                t0 = time.monotonic()
                 prompt_result = stt.transcribe(wav_in)
+                t_stt = time.monotonic() - t0
+
                 user_text = prompt_result.text
                 stt_confidence = prompt_result.confidence
 
                 if not user_text:
                     continue
 
-                t_rec = 0.0
-                t_stt = 0.0
-
-            # Check for exit commands
+            # Remove old EXIT_COMMANDS check to let Intent Classifier handle it
             clean_msg = _sanitise(user_text)
-            if clean_msg in EXIT_COMMANDS:
-                follow_up_mode = False
-                print("🔴 Follow-up mode expired")
-                continue
-
+            
+            should_sleep = False
+            
             # ── Common: prompt → LLM → TTS → play ────────────────────────────
             t_turn = time.monotonic()
+            
+            # ── Speech Sanity Check ─────────────────────────────────────────
+            import speech_sanity
+            is_suspicious, reason = speech_sanity.check_sanity(user_text, t_rec, stt_confidence)
+            if is_suspicious:
+                print(f"  ⚠️  Suspicious transcript: {reason}")
+                print(f"  🎙  Original: {user_text}")
+                print("  ❓  Confirmation requested")
+                response = f"Did you say '{user_text}'?"
+                
+                t_llm = 0.0
+                print("  🔊  Speaking...")
+                t0 = time.monotonic()
+                wav_out = tts.speak(response)
+                t_tts = time.monotonic() - t0
+
+                t0 = time.monotonic()
+                audio.play(wav_out)
+                t_play = time.monotonic() - t0
+
+                t_total = time.monotonic() - t_turn
+                print(f"  ⏱   rec={t_rec:.1f}s  stt={t_stt:.1f}s  llm={t_llm:.1f}s  tts={t_tts:.1f}s  play={t_play:.1f}s  total={t_total:.1f}s\n")
+                continue
             
             # ── Context Resolution ──────────────────────────────────────────
             resolved_user_text = context_resolver.resolve_context(user_text, memory.get_history())
@@ -170,49 +194,86 @@ def main():
             # Use the resolved text for extraction and generation
             user_text = resolved_user_text
             
-            # Extract facts before generating the response
-            extractor.run_extraction_and_save(user_text, stt_confidence)
+            # ── Intent Classification ───────────────────────────────────────
+            import intent_classifier
+            intent = intent_classifier.classify_intent(user_text)
+            print(f"  🧠  Intent: {intent}")
             
-            import retriever
-            direct_ans = retriever.retrieve_direct_answer(user_text)
+            response = None
+            if intent == "GREETING":
+                if "good morning" in clean_msg:
+                    response = "Good morning."
+                else:
+                    response = "Hi."
+            elif intent == "THANKS":
+                response = "You're welcome."
+            elif intent == "GOODBYE":
+                print("  👋  Goodbye detected")
+                response = "See you later."
+                should_sleep = True
+            elif intent == "IDENTITY":
+                response = "I'm Eleven."
+            elif intent == "SMALL_TALK":
+                if "how are you" in clean_msg or "how's it going" in clean_msg:
+                    response = "I'm good. How about you?"
+                else:
+                    response = "Just talking with you."
+            elif intent == "ACKNOWLEDGEMENT":
+                if "i'll do it" in clean_msg or "ill do it" in clean_msg:
+                    response = "Sounds good."
+                else:
+                    response = "Alright."
             
-            if direct_ans:
-                response = direct_ans
+            if response:
                 t_llm = 0.0
             else:
-                print("  📤  [LLM] Sending prompt to LLM...")
-                t0 = time.monotonic()
-                response = llm.chat(user_text)
-                t_llm = time.monotonic() - t0
-                print("  ✅  [LLM] Response received.")
+                # Extract facts before generating the response
+                extractor.run_extraction_and_save(user_text, stt_confidence)
                 
-                # ── Pre-TTS Response Validator ────────────────────────────
-                # Actively correct the LLM if it hallucinates known core facts.
-                # 1. Name validation
-                if "my name" in clean_msg:
-                    stored_name = memory.get_profile().get("name")
-                    if stored_name and stored_name.lower() not in response.lower():
-                        print(f"  🛑  [Validator] LLM missed name. Overriding to '{stored_name}'.")
-                        response = f"{stored_name}."
-                # 2. Favorite color validation
-                if "favorite color" in clean_msg or "favourite color" in clean_msg:
-                    stored_color = memory_manager.get_value("preferences", "favorite_color")
-                    if stored_color:
-                        import retriever
-                        formatted_color = retriever._format_value(stored_color)
-                        if formatted_color.lower() not in response.lower():
-                            ans = formatted_color[0].upper() + formatted_color[1:] + "."
-                            print(f"  🛑  [Validator] LLM missed color. Overriding to '{ans}'.")
-                            response = ans
+                import retriever
+                direct_ans = retriever.retrieve_direct_answer(user_text)
+                
+                if direct_ans:
+                    response = direct_ans
+                    t_llm = 0.0
+                else:
+                    print("  📤  [LLM] Sending prompt to LLM...")
+                    t0 = time.monotonic()
+                    response = llm.chat(user_text)
+                    t_llm = time.monotonic() - t0
+                    print("  ✅  [LLM] Response received.")
+                    
+                    # ── Pre-TTS Response Validator ────────────────────────────
+                    # Actively correct the LLM if it hallucinates known core facts.
+                    # 1. Name validation
+                    if "my name" in clean_msg:
+                        stored_name = memory.get_profile().get("name")
+                        if stored_name and stored_name.lower() not in response.lower():
+                            print(f"  🛑  [Validator] LLM missed name. Overriding to '{stored_name}'.")
+                            response = f"{stored_name}."
+                    # 2. Favorite color validation
+                    if "favorite color" in clean_msg or "favourite color" in clean_msg:
+                        stored_color = memory_manager.get_value("preferences", "favorite_color")
+                        if stored_color:
+                            import retriever
+                            formatted_color = retriever._format_value(stored_color)
+                            if formatted_color.lower() not in response.lower():
+                                ans = formatted_color[0].upper() + formatted_color[1:] + "."
+                                print(f"  🛑  [Validator] LLM missed color. Overriding to '{ans}'.")
+                                response = ans
 
             # Log memory and TTS start
             memory.add_turn(user_text, response)
             last_interaction = time.monotonic()
-            if follow_up_mode:
-                print("⏳ Follow-up timer reset")
+            if session_mode and not should_sleep:
+                print("⏳ Session timeout reset")
             print(f"  Eleven: {response}")
 
-            print("  🔊  Speaking...")
+            if should_sleep:
+                print("  🔊  Speaking goodbye")
+            else:
+                print("  🔊  Speaking...")
+                
             t0 = time.monotonic()
             wav_out = tts.speak(response)
             t_tts = time.monotonic() - t0
@@ -220,6 +281,10 @@ def main():
             t0 = time.monotonic()
             audio.play(wav_out)
             t_play = time.monotonic() - t0
+
+            if should_sleep:
+                session_mode = False
+                print("  😴  Sleep mode")
 
             t_total = time.monotonic() - t_turn
             print(f"  ⏱   rec={t_rec:.1f}s  stt={t_stt:.1f}s  llm={t_llm:.1f}s  tts={t_tts:.1f}s  play={t_play:.1f}s  total={t_total:.1f}s")
