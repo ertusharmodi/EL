@@ -31,14 +31,16 @@ import audio
 import stt
 import llm
 import tts
+import wake
 import config
 
 
 def main():
-    print("\n🤖  Eleven is ready. Press Ctrl+C to quit.\n")
+    print("\n🤖  Eleven is ready. Say 'Hey Jarvis' to wake her up. Press Ctrl+C to quit.\n")
     print(f"    Model : {config.OLLAMA_MODEL}")
     print(f"    STT   : Whisper {config.WHISPER_MODEL}")
-    print(f"    TTS   : Kokoro ({config.KOKORO_VOICE} · lang={config.KOKORO_LANG})")
+    print(f"    TTS   : ElevenLabs ({config.ELEVENLABS_MODEL_ID})")
+    print(f"    Wake  : OpenWakeWord ({config.WAKE_MODEL}, threshold={config.WAKE_THRESHOLD})")
     print(f"    Listen: {config.VAD_ENGINE.upper()} VAD (stops after {config.VAD_SILENCE_TIMEOUT}s silence)\n")
     print("─" * 50)
 
@@ -48,6 +50,9 @@ def main():
     print("─" * 50)
     while True:
         try:
+            # ── 0. Wait for wake word ─────────────────────────────
+            wake.listen_for_wake_word()
+
             t_turn = time.monotonic()
 
             # ── 1. Record ────────────────────────────────────

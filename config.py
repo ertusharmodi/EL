@@ -177,6 +177,24 @@ KOKORO_VOICE = "hf_alpha"   # no longer used; ElevenLabs is the active TTS
 KOKORO_LANG  = "a"          # no longer used
 KOKORO_SAMPLE_RATE = 24000  # no longer used
 
+# ── Wake Word (OpenWakeWord) ───────────────────────────────────────────────────
+# Model selection:
+#   - A built-in model name string (e.g. "hey_jarvis") → OWW loads its own bundled model.
+#   - An absolute path to a .onnx file (e.g. "/path/to/hey_eleven.onnx") → custom model.
+#     Drop a trained model into wake/ and update this path to switch wake words.
+WAKE_MODEL        = "hey_jarvis"   # proxy for "Hey Eleven"; swap when custom model is trained
+
+# Detection confidence threshold (0.0–1.0).
+# 0.5 = balanced; lower = more sensitive (more false positives); higher = stricter.
+WAKE_THRESHOLD    = 0.5
+
+# Audio chunk size fed to OWW (milliseconds). OWW's native window is 80ms.
+# Do not change — mismatched chunk sizes degrade accuracy.
+WAKE_CHUNK_MS     = 80
+
+# Sample rate OWW expects. Must stay at 16000 — OWW is trained on 16kHz audio.
+WAKE_SAMPLE_RATE  = 16000
+
 # ── Memory ─────────────────────────────────────────────────────────────────────
 MEMORY_DIR             = os.path.join(_HERE, "memory")
 MEMORY_SHORT_TERM_FILE = os.path.join(MEMORY_DIR, "short_term.json")
