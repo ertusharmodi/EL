@@ -22,11 +22,3 @@ python-dotenv
 # Voice Activity Detection — neural model, far more accurate than RMS energy
 # torch is already a transitive dependency of silero-vad
 silero-vad
-
-# Wake word detection — fully local, Apache 2.0, no API key required (Phase 3)
-# Runs on ONNX Runtime; uses pre-trained models bundled with the package.
-openwakeword
-
-# PyAudio — low-level microphone stream required by OpenWakeWord's inference loop.
-# OWW processes raw int16 PCM frames; sounddevice is not used here.
-pyaudio

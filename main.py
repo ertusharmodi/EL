@@ -26,66 +26,145 @@ warnings.filterwarnings(
 
 import sys
 import time
+import threading
 
 import audio
 import stt
 import llm
 import tts
-import wake
 import config
+import extractor
+import memory_manager
+
+
+def _sanitise(text: str) -> str:
+    """Lowercase, remove punctuation, collapse whitespace — for wake matching."""
+    return " ".join(
+        "".join(c for c in tok if c.isalnum())
+        for tok in text.lower().split()
+        if any(c.isalnum() for c in tok)
+    )
 
 
 def main():
-    print("\n🤖  Eleven is ready. Say 'Hey Jarvis' to wake her up. Press Ctrl+C to quit.\n")
+    print("\n🤖  Eleven is ready. Say 'Hey Eleven' to wake her up. Press Ctrl+C to quit.\n")
     print(f"    Model : {config.OLLAMA_MODEL}")
     print(f"    STT   : Whisper {config.WHISPER_MODEL}")
     print(f"    TTS   : ElevenLabs ({config.ELEVENLABS_MODEL_ID})")
-    print(f"    Wake  : OpenWakeWord ({config.WAKE_MODEL}, threshold={config.WAKE_THRESHOLD})")
+    print(f"    Wake  : STT Polling ({len(config.WAKE_PHRASES)} phrases, {config.WAKE_AWAKE_TIMEOUT_SECS}s session timeout)")
     print(f"    Listen: {config.VAD_ENGINE.upper()} VAD (stops after {config.VAD_SILENCE_TIMEOUT}s silence)\n")
     print("─" * 50)
 
-    # Measure ambient noise floor once before the first turn.
-    # This calibrates the diagnostic output and the energy-fallback threshold.
     audio.calibrate_noise()
+    memory_manager.load_memory()
     print("─" * 50)
+
+    # ── Session state ─────────────────────────────────────────────────────────
+    awake            = False
+    last_interaction = 0.0    # monotonic timestamp of last LLM response
+
     while True:
         try:
-            # ── 0. Wait for wake word ─────────────────────────────
-            wake.listen_for_wake_word()
+            now = time.monotonic()
 
+            # ── Check session timeout ─────────────────────────────────────────
+            if awake and (now - last_interaction) >= config.WAKE_AWAKE_TIMEOUT_SECS:
+                awake = False
+                print(
+                    f"\n  💤  [State] SLEEPING — no activity for "
+                    f"{config.WAKE_AWAKE_TIMEOUT_SECS}s. Say 'Hey Eleven' to wake.\n"
+                )
+
+            # ── SLEEP: listen for wake word ───────────────────────────────────
+            if not awake:
+                print("  👂  [State] SLEEPING — listening for wake word...")
+                wav_in = audio.record_vad()
+
+                wake_text = stt.transcribe(wav_in)
+                if not wake_text:
+                    continue
+
+                wake_clean = _sanitise(wake_text)
+                print(f"  🔍  [Wake] Heard: '{wake_clean}'")
+
+                # Match: phrase must be at the START of the utterance.
+                matched_phrase = None
+                for phrase in config.WAKE_PHRASES:
+                    if wake_clean.startswith(phrase):
+                        matched_phrase = phrase
+                        break
+
+                if not matched_phrase:
+                    print(f"  ✗   [Wake] No match — still sleeping.")
+                    continue
+
+                awake            = True
+                last_interaction = time.monotonic()
+                print(f"  ✅  [Wake] WAKE DETECTED — matched '{matched_phrase}'")
+                print(f"  🟢  [State] AWAKE — session started.")
+
+                # Inline prompt: user spoke prompt in same breath as wake phrase.
+                inline_text = wake_clean[len(matched_phrase):].strip()
+                for prefix in ("and ", ", "):
+                    if inline_text.startswith(prefix):
+                        inline_text = inline_text[len(prefix):].strip()
+
+                if inline_text:
+                    user_text = inline_text
+                    t_rec = 0.0
+                    t_stt = 0.0
+                    print(f"  📎  Inline prompt: '{user_text}'")
+                else:
+                    # Prompt comes in the next utterance.
+                    print("  🎙  Listening to prompt...")
+                    t0 = time.monotonic()
+                    prompt_wav = audio.record_vad()
+                    t_rec = time.monotonic() - t0
+
+                    print("  📝  Transcribing prompt...")
+                    t0 = time.monotonic()
+                    user_text = stt.transcribe(prompt_wav)
+                    t_stt = time.monotonic() - t0
+
+                    if not user_text:
+                        print("  (Nothing heard after wake — back to listening)\n")
+                        continue
+
+            # ── AWAKE: any speech goes directly to LLM ────────────────────────
+            else:
+                remaining = int(config.WAKE_AWAKE_TIMEOUT_SECS - (time.monotonic() - last_interaction))
+                print(f"  🟢  [State] AWAKE — listening for prompt (sleeps in {remaining}s)...")
+
+                wav_in = audio.record_vad()
+                user_text = stt.transcribe(wav_in)
+
+                if not user_text:
+                    continue
+
+                t_rec = 0.0
+                t_stt = 0.0
+
+            # ── Common: prompt → LLM → TTS → play ────────────────────────────
             t_turn = time.monotonic()
-
-            # ── 1. Record ────────────────────────────────────
-            t0 = time.monotonic()
-            wav_in = audio.record_vad()
-            t_rec = time.monotonic() - t0
-
-            # ── 2. Transcribe ────────────────────────────────
-            print("  📝  Transcribing...")
-            t0 = time.monotonic()
-            user_text = stt.transcribe(wav_in)
-            t_stt = time.monotonic() - t0
-
-            if not user_text:
-                print("  (Nothing heard — try again)\n")
-                continue
-
             print(f"  You  : {user_text}")
+            print(f"  📤  [LLM] Sending prompt to LLM...")
 
-            # ── 3. LLM response ──────────────────────────────
-            print("  🧠  Thinking...")
             t0 = time.monotonic()
             response = llm.chat(user_text)
             t_llm = time.monotonic() - t0
-            print(f"  Eleven: {response}")
 
-            # ── 4. Text-to-speech ────────────────────────────
+            last_interaction = time.monotonic()
+            print(f"  ✅  [LLM] Response received.")
+            print(f"  Eleven: {response}")
+            
+            # Extract facts in the background while speaking
+            threading.Thread(target=extractor.extract_and_save, args=(user_text,)).start()
+
             print("  🔊  Speaking...")
             t0 = time.monotonic()
             wav_out = tts.speak(response)
             t_tts = time.monotonic() - t0
 
-            # ── 5. Play response ─────────────────────────────
             t0 = time.monotonic()
             audio.play(wav_out)
             t_play = time.monotonic() - t0
@@ -101,3 +180,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

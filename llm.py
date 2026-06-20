@@ -18,6 +18,7 @@ import ollama
 
 import config
 import memory
+import memory_manager
 
 # ── System prompt ─────────────────────────────────────────────────────────────────
 _PERSONALITY_FILE = os.path.join(
@@ -55,10 +56,12 @@ def _build_system_prompt() -> str:
         "\nDo not recite this list unprompted."
         f"\n" + "\n".join(lines)
     )
-    return base + profile_block
+    
+    # 3. Append long-term memory context if available.
+    long_term_block = memory_manager.build_memory_context()
+    
+    return base + profile_block + long_term_block
 
-
-_SYSTEM_PROMPT = _build_system_prompt()
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 _THINK_RE = re.compile(r"<think>.*?</think>", re.DOTALL)
@@ -84,6 +87,9 @@ def chat(user_text: str) -> str:
     thinking field character count.
     """
     t0 = time.monotonic()
+    
+    hist = memory.get_history()
+    print(f"  🧠  [MEMORY] context size: {len(hist) // 2} turns")
 
     response = ollama.chat(
         model=config.OLLAMA_MODEL,
@@ -102,8 +108,8 @@ def chat(user_text: str) -> str:
             "temperature":   config.OLLAMA_TEMPERATURE,
         },
         messages=[
-            {"role": "system", "content": _SYSTEM_PROMPT},
-            *memory.get_history(),   # last N turns injected here
+            {"role": "system", "content": _build_system_prompt()},
+            *hist,   # last N turns injected here
             {"role": "user",   "content": user_text},
         ],
     )

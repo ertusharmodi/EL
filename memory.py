@@ -47,9 +47,9 @@ def _load() -> None:
         with open(path, "r", encoding="utf-8") as fh:
             data = json.load(fh)
         _history = data.get("turns", [])
-        print(f"  🧠  [Memory] Loaded {len(_history) // 2} turn(s) from {path}")
+        print(f"  🧠  [MEMORY] loaded recent turns ({len(_history) // 2})")
     except (json.JSONDecodeError, OSError) as exc:
-        print(f"  ⚠️   [Memory] Could not load memory ({exc}) — starting fresh.")
+        print(f"  ⚠️   [MEMORY] Could not load memory ({exc}) — starting fresh.")
         _history = []
 
 
@@ -61,7 +61,7 @@ def _save() -> None:
         with open(path, "w", encoding="utf-8") as fh:
             json.dump({"turns": _history}, fh, ensure_ascii=False, indent=2)
     except OSError as exc:
-        print(f"  ⚠️   [Memory] Could not save memory ({exc}).")
+        print(f"  ⚠️   [MEMORY] Could not save memory ({exc}).")
 
 
 def _trim() -> None:
@@ -82,10 +82,22 @@ def _load_profile() -> None:
     try:
         with open(path, "r", encoding="utf-8") as fh:
             _profile = json.load(fh)
-        print(f"  🧠  [Memory] Loaded profile ({len(_profile)} field(s)) from {path}")
+        print(f"  🧠  [MEMORY] loaded profile ({len(_profile)} fields)")
     except (json.JSONDecodeError, OSError) as exc:
-        print(f"  ⚠️   [Memory] Could not load profile ({exc}) — using empty profile.")
+        print(f"  ⚠️   [MEMORY] Could not load profile ({exc}) — using empty profile.")
         _profile = {}
+
+
+def _save_profile() -> None:
+    """Persist _profile to profile.json."""
+    os.makedirs(config.MEMORY_DIR, exist_ok=True)
+    path = config.MEMORY_PROFILE_FILE
+    try:
+        with open(path, "w", encoding="utf-8") as fh:
+            json.dump(_profile, fh, ensure_ascii=False, indent=2)
+        print("  🧠  [MEMORY] saved profile field")
+    except OSError as exc:
+        print(f"  ⚠️   [MEMORY] Could not save profile ({exc}).")
 
 
 # ── Public API ─────────────────────────────────────────────────────────────────
@@ -98,6 +110,23 @@ def get_profile() -> dict:
         for key, value in memory.get_profile().items(): ...
     """
     return dict(_profile)
+
+
+def set_profile_fields(fields: dict) -> None:
+    """
+    Merge the given fields into the user profile and persist to disk.
+    Only fields that are strings and actually changed will be saved.
+    """
+    global _profile
+    changed = False
+    for k, v in fields.items():
+        # Only accept basic string facts.
+        if isinstance(v, str) and _profile.get(k) != v:
+            _profile[k] = v
+            changed = True
+            
+    if changed:
+        _save_profile()
 
 
 def get_history() -> List[dict]:
@@ -129,7 +158,7 @@ def clear() -> None:
     global _history
     _history = []
     _save()
-    print("  🧠  [Memory] Cleared.")
+    print("  🧠  [MEMORY] Cleared.")
 
 
 def turn_count() -> int:

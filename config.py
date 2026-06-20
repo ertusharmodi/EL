@@ -177,28 +177,28 @@ KOKORO_VOICE = "hf_alpha"   # no longer used; ElevenLabs is the active TTS
 KOKORO_LANG  = "a"          # no longer used
 KOKORO_SAMPLE_RATE = 24000  # no longer used
 
-# ── Wake Word (OpenWakeWord) ───────────────────────────────────────────────────
-# Model selection:
-#   - A built-in model name string (e.g. "hey_jarvis") → OWW loads its own bundled model.
-#   - An absolute path to a .onnx file (e.g. "/path/to/hey_eleven.onnx") → custom model.
-#     Drop a trained model into wake/ and update this path to switch wake words.
-WAKE_MODEL        = "hey_jarvis"   # proxy for "Hey Eleven"; swap when custom model is trained
+# ── Wake Word (STT Polling) ────────────────────────────────────────────────────
+# In STT polling mode, the assistant constantly listens with VAD. When a speech burst
+# completes, STT transcribes it. If the transcript matches one of these phrases,
+# it wakes up.
+WAKE_PHRASES = [
+    "hey eleven",
+    "hi eleven",
+    "hello eleven",
+    "hey 11",
+    "hi 11",
+    "hello 11",
+]
 
-# Detection confidence threshold (0.0–1.0).
-# 0.5 = balanced; lower = more sensitive (more false positives); higher = stricter.
-WAKE_THRESHOLD    = 0.5
-
-# Audio chunk size fed to OWW (milliseconds). OWW's native window is 80ms.
-# Do not change — mismatched chunk sizes degrade accuracy.
-WAKE_CHUNK_MS     = 80
-
-# Sample rate OWW expects. Must stay at 16000 — OWW is trained on 16kHz audio.
-WAKE_SAMPLE_RATE  = 16000
+# Seconds of inactivity after which the assistant returns to sleep mode.
+# The timer resets after every completed LLM response.
+WAKE_AWAKE_TIMEOUT_SECS = 30
 
 # ── Memory ─────────────────────────────────────────────────────────────────────
 MEMORY_DIR             = os.path.join(_HERE, "memory")
 MEMORY_SHORT_TERM_FILE = os.path.join(MEMORY_DIR, "short_term.json")
 MEMORY_PROFILE_FILE    = os.path.join(MEMORY_DIR, "profile.json")   # stub for Phase 3
+MEMORY_LONG_TERM_FILE  = os.path.join(MEMORY_DIR, "long_term.json")
 
 # Number of conversation turns to keep in short-term memory.
 # Each turn = 1 user message + 1 assistant message = 2 JSON entries.
