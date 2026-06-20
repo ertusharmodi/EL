@@ -18,7 +18,15 @@ def retrieve_direct_answer(user_message: str) -> Optional[str]:
     
     clean_msg = user_message.strip().strip(".!? ").lower()
 
-    # ── 1. Hardcoded conversational answers ────────────────────────────────
+    # ── 1. Acknowledgements ────────────────────────────────────────────────
+    ack_phrases = {"correct", "exactly", "yes", "yeah", "yep", "right", "makes sense"}
+    if clean_msg in ack_phrases or re.match(r"^(?:that's|that is|those are) my ", clean_msg):
+        import random
+        acks = ["Got it.", "Noted.", "Exactly.", "Right.", "Makes sense."]
+        print("🧠 Memory Match Found (Acknowledgement)")
+        return random.choice(acks)
+
+    # ── 2. Hardcoded conversational answers ────────────────────────────────
     hardcoded = {
         "who are you": "I'm Eleven.",
         "what are you doing": "Just talking with you.",
@@ -32,7 +40,7 @@ def retrieve_direct_answer(user_message: str) -> Optional[str]:
         print("🧠 Memory Answer Generated")
         return hardcoded[clean_msg]
         
-    # ── 2. Exact Profile Matches (Name) ────────────────────────────────────
+    # ── 3. Exact Profile Matches (Name) ────────────────────────────────────
     if clean_msg in ("what's my name", "what is my name"):
         prof = memory.get_profile()
         name = prof.get("name")
@@ -42,14 +50,20 @@ def retrieve_direct_answer(user_message: str) -> Optional[str]:
             # Only return the requested fact
             return f"{name}."
 
-    # ── 3. Favorite <thing> ────────────────────────────────────────────────
-    match = re.search(r"what is my favo(?:u)?rite (.+)|what's my favo(?:u)?rite (.+)", clean_msg)
+    # ── 4. Favorite <thing> ────────────────────────────────────────────────
+    match = re.search(r"(?:what is|what's|what are) my favo(?:u)?rite (.+)", clean_msg)
     if match:
-        thing = (match.group(1) or match.group(2)).strip()
+        thing = match.group(1).strip()
         slug = re.sub(r"[^a-z0-9]+", "_", thing).strip("_")
         key = f"favorite_{slug}"
         
+        # Try exact key, then singular, then plural
         val = memory_manager.get_value("preferences", key)
+        if not val and key.endswith("s"):
+            val = memory_manager.get_value("preferences", key[:-1])
+        if not val and not key.endswith("s"):
+            val = memory_manager.get_value("preferences", key + "s")
+            
         if val:
             print("🧠 Memory Match Found")
             formatted = _format_value(val)

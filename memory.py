@@ -22,6 +22,8 @@
 
 import json
 import os
+import time
+import inspect
 from typing import List
 
 import config
@@ -34,6 +36,8 @@ _history: List[dict] = []
 # User profile dict loaded from profile.json at import.
 # Keys are arbitrary (name, city, profession, …); values are strings.
 _profile: dict = {}
+
+_last_save_time: float = 0.0
 
 
 def _load() -> None:
@@ -147,8 +151,36 @@ def add_turn(user_text: str, assistant_text: str) -> None:
         user_text:      The user's message for this turn.
         assistant_text: Eleven's response for this turn.
     """
+    global _history, _last_save_time
+    
+    current_time = time.time()
+    
+    # ── Deduplication Check ──────────────────────────────────────────────────
+    if _history:
+        last_turn = _history[-1]
+        time_diff = current_time - _last_save_time
+        
+        # Check if we're trying to add the exact same assistant turn within 5 seconds
+        if time_diff <= 5.0 and last_turn.get("role") == "assistant" and last_turn.get("content") == assistant_text:
+            print("  ⚠️  Duplicate turn skipped")
+            return
+
+    # Get caller info
+    try:
+        caller_frame = inspect.currentframe().f_back
+        caller_file = os.path.basename(caller_frame.f_code.co_filename)
+        caller_func = caller_frame.f_code.co_name
+    except Exception:
+        caller_file = "unknown"
+        caller_func = "unknown"
+        
+    print(f"  [MEMORY SAVE] User turn added (Function: {caller_func}, File: {caller_file})")
     _history.append({"role": "user",      "content": user_text})
+    
+    print(f"  [MEMORY SAVE] Assistant turn added (Function: {caller_func}, File: {caller_file})")
     _history.append({"role": "assistant", "content": assistant_text})
+    
+    _last_save_time = current_time
     _trim()
     _save()
 

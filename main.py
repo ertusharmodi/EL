@@ -35,6 +35,7 @@ import config
 import extractor
 import memory_manager
 import memory
+import context_resolver
 
 
 def _sanitise(text: str) -> str:
@@ -155,7 +156,19 @@ def main():
 
             # ── Common: prompt → LLM → TTS → play ────────────────────────────
             t_turn = time.monotonic()
-            print(f"  You  : {user_text}")
+            
+            # ── Context Resolution ──────────────────────────────────────────
+            resolved_user_text = context_resolver.resolve_context(user_text, memory.get_history())
+            
+            if resolved_user_text != user_text:
+                print(f"  You  : {user_text} -> {resolved_user_text}")
+                # Recompute clean_msg for the validator if the text changed
+                clean_msg = _sanitise(resolved_user_text)
+            else:
+                print(f"  You  : {user_text}")
+            
+            # Use the resolved text for extraction and generation
+            user_text = resolved_user_text
             
             # Extract facts before generating the response
             extractor.run_extraction_and_save(user_text, stt_confidence)

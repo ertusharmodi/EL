@@ -120,8 +120,8 @@ def chat(user_text: str) -> str:
     # _clean() strips residual <think> tags as a safety net.
     content = _clean(response.message.content)
 
-    # Persist this turn to short-term memory.
-    memory.add_turn(user_text, content)
+    # content is safely stripped. It will be added to short-term memory by main.py
+    # after the pre-TTS validators run.
 
     # ── Diagnostics ──────────────────────────────────────────────────────────
     try:
