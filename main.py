@@ -26,7 +26,6 @@ warnings.filterwarnings(
 
 import sys
 import time
-import threading
 
 import audio
 import stt
@@ -60,27 +59,27 @@ def main():
     print("─" * 50)
 
     # ── Session state ─────────────────────────────────────────────────────────
-    awake            = False
+    follow_up_mode   = False
     last_interaction = 0.0    # monotonic timestamp of last LLM response
+    FOLLOW_UP_TIMEOUT = 60.0
+    EXIT_COMMANDS = {"goodbye", "bye", "stop listening", "sleep", "go to sleep"}
 
     while True:
         try:
             now = time.monotonic()
 
             # ── Check session timeout ─────────────────────────────────────────
-            if awake and (now - last_interaction) >= config.WAKE_AWAKE_TIMEOUT_SECS:
-                awake = False
-                print(
-                    f"\n  💤  [State] SLEEPING — no activity for "
-                    f"{config.WAKE_AWAKE_TIMEOUT_SECS}s. Say 'Hey Eleven' to wake.\n"
-                )
+            if follow_up_mode and (now - last_interaction) >= FOLLOW_UP_TIMEOUT:
+                follow_up_mode = False
+                print("🔴 Follow-up mode expired")
 
             # ── SLEEP: listen for wake word ───────────────────────────────────
-            if not awake:
-                print("  👂  [State] SLEEPING — listening for wake word...")
+            if not follow_up_mode:
+                print("👂 Waiting for wake word")
                 wav_in = audio.record_vad()
 
-                wake_text = stt.transcribe(wav_in)
+                wake_result = stt.transcribe(wav_in)
+                wake_text = wake_result.text
                 if not wake_text:
                     continue
 
@@ -98,10 +97,10 @@ def main():
                     print(f"  ✗   [Wake] No match — still sleeping.")
                     continue
 
-                awake            = True
+                follow_up_mode   = True
                 last_interaction = time.monotonic()
                 print(f"  ✅  [Wake] WAKE DETECTED — matched '{matched_phrase}'")
-                print(f"  🟢  [State] AWAKE — session started.")
+                print("🟢 Follow-up mode enabled")
 
                 # Inline prompt: user spoke prompt in same breath as wake phrase.
                 inline_text = wake_clean[len(matched_phrase):].strip()
@@ -111,6 +110,7 @@ def main():
 
                 if inline_text:
                     user_text = inline_text
+                    stt_confidence = wake_result.confidence
                     t_rec = 0.0
                     t_stt = 0.0
                     print(f"  📎  Inline prompt: '{user_text}'")
@@ -123,8 +123,10 @@ def main():
 
                     print("  📝  Transcribing prompt...")
                     t0 = time.monotonic()
-                    user_text = stt.transcribe(prompt_wav)
+                    prompt_result = stt.transcribe(prompt_wav)
                     t_stt = time.monotonic() - t0
+                    user_text = prompt_result.text
+                    stt_confidence = prompt_result.confidence
 
                     if not user_text:
                         print("  (Nothing heard after wake — back to listening)\n")
@@ -132,11 +134,10 @@ def main():
 
             # ── AWAKE: any speech goes directly to LLM ────────────────────────
             else:
-                remaining = int(config.WAKE_AWAKE_TIMEOUT_SECS - (time.monotonic() - last_interaction))
-                print(f"  🟢  [State] AWAKE — listening for prompt (sleeps in {remaining}s)...")
-
                 wav_in = audio.record_vad()
-                user_text = stt.transcribe(wav_in)
+                prompt_result = stt.transcribe(wav_in)
+                user_text = prompt_result.text
+                stt_confidence = prompt_result.confidence
 
                 if not user_text:
                     continue
@@ -144,21 +145,37 @@ def main():
                 t_rec = 0.0
                 t_stt = 0.0
 
+            # Check for exit commands
+            clean_msg = _sanitise(user_text)
+            if clean_msg in EXIT_COMMANDS:
+                follow_up_mode = False
+                print("🔴 Follow-up mode expired")
+                continue
+
             # ── Common: prompt → LLM → TTS → play ────────────────────────────
             t_turn = time.monotonic()
             print(f"  You  : {user_text}")
-            print(f"  📤  [LLM] Sending prompt to LLM...")
-
-            t0 = time.monotonic()
-            response = llm.chat(user_text)
-            t_llm = time.monotonic() - t0
+            
+            # Extract facts before generating the response
+            extractor.run_extraction_and_save(user_text, stt_confidence)
+            
+            import retriever
+            direct_ans = retriever.retrieve_direct_answer(user_text)
+            
+            if direct_ans:
+                response = direct_ans
+                t_llm = 0.0
+            else:
+                print(f"  📤  [LLM] Sending prompt to LLM...")
+                t0 = time.monotonic()
+                response = llm.chat(user_text)
+                t_llm = time.monotonic() - t0
+                print(f"  ✅  [LLM] Response received.")
 
             last_interaction = time.monotonic()
-            print(f"  ✅  [LLM] Response received.")
+            if follow_up_mode:
+                print("⏳ Follow-up timer reset")
             print(f"  Eleven: {response}")
-            
-            # Extract facts in the background while speaking
-            threading.Thread(target=extractor.extract_and_save, args=(user_text,)).start()
 
             print("  🔊  Speaking...")
             t0 = time.monotonic()

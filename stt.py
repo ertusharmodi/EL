@@ -8,6 +8,7 @@
 #   - A low-confidence warning is printed when any segment falls below the threshold.
 
 import warnings
+from dataclasses import dataclass
 from typing import Optional
 
 import numpy as np
@@ -30,6 +31,13 @@ warnings.filterwarnings(
 # import time. This avoids a 2-3 second blocking side effect whenever any
 # other module imports stt, and makes the startup sequence more predictable.
 _model: Optional[WhisperModel] = None
+
+
+@dataclass(frozen=True)
+class TranscriptionResult:
+    """Transcription text plus overall confidence (min segment confidence, 0.0–1.0)."""
+    text: str
+    confidence: float
 
 
 def _get_model() -> WhisperModel:
@@ -71,13 +79,18 @@ def _is_silent(wav_path: str) -> bool:
     return rms < config.SILENCE_THRESHOLD
 
 
-def transcribe(wav_path: str) -> str:
+def _segment_confidence(avg_logprob: float) -> float:
+    """Convert Whisper avg_logprob to a 0–1 confidence score."""
+    return float(min(1.0, max(0.0, 2 ** avg_logprob)))
+
+
+def transcribe(wav_path: str) -> TranscriptionResult:
     """
     Transcribe a WAV file to text.
 
-    Returns the spoken text as a stripped string.
-    Returns an empty string if the recording is silent (RMS below threshold)
-    or if Whisper's internal no-speech probability exceeds the configured threshold.
+    Returns TranscriptionResult with spoken text and overall confidence.
+    Overall confidence is the minimum segment confidence (conservative).
+    Returns empty text and 0.0 confidence for silent recordings.
 
     Confidence logging:
         Per-segment avg_logprob and no_speech_prob are printed for every segment.
@@ -86,7 +99,7 @@ def transcribe(wav_path: str) -> str:
         are visible in the terminal before they reach the LLM.
     """
     if _is_silent(wav_path):
-        return ""
+        return TranscriptionResult(text="", confidence=0.0)
 
     model = _get_model()
     segments_gen, info = model.transcribe(
@@ -108,15 +121,15 @@ def transcribe(wav_path: str) -> str:
 
     parts = []
     low_confidence_flags = []
+    segment_confidences = []
 
     for i, seg in enumerate(segments):
         seg_text = seg.text.strip()
         if not seg_text:
             continue
 
-        # avg_logprob is log-probability of the segment tokens (higher = more confident).
-        # Convert to a 0–1 confidence score for display: exp(avg_logprob).
-        seg_conf = float(min(1.0, max(0.0, 2 ** seg.avg_logprob)))  # log2 → probability
+        seg_conf = _segment_confidence(seg.avg_logprob)
+        segment_confidences.append(seg_conf)
         is_low = seg_conf < config.WHISPER_SEGMENT_CONFIDENCE_THRESHOLD
 
         print(
@@ -132,6 +145,7 @@ def transcribe(wav_path: str) -> str:
         parts.append(seg_text)
 
     text = " ".join(parts).strip()
+    overall_confidence = min(segment_confidences) if segment_confidences else 0.0
 
     # Summary line: overall language confidence + low-confidence warning
     lang_conf = info.language_probability
@@ -141,8 +155,14 @@ def transcribe(wav_path: str) -> str:
             f"transcription may contain errors. "
             f"Flagged: {low_confidence_flags}"
         )
-        print(f"  🎯  Transcribed ({lang_conf:.0%} language confidence) [REVIEW ADVISED]")
+        print(
+            f"  🎯  Transcribed ({lang_conf:.0%} language confidence, "
+            f"{overall_confidence:.0%} min segment) [REVIEW ADVISED]"
+        )
     else:
-        print(f"  🎯  Transcribed ({lang_conf:.0%} language confidence)")
+        print(
+            f"  🎯  Transcribed ({lang_conf:.0%} language confidence, "
+            f"{overall_confidence:.0%} min segment)"
+        )
 
-    return text
+    return TranscriptionResult(text=text, confidence=overall_confidence)

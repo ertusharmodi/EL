@@ -1,0 +1,15 @@
+...............................F
+======================================================================
+FAIL: test_updates_favorite_on_change (test_extractor.TestRunExtractionAndSave)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Applications/Xcode.app/Contents/Developer/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/unittest/mock.py", line 1337, in patched
+    return func(*newargs, **newkeywargs)
+  File "/Users/tusharthi.escape/Documents/Eleven/test_extractor.py", line 264, in test_updates_favorite_on_change
+    self.assertEqual(
+AssertionError: ['black', 'blue'] != 'blue'
+
+----------------------------------------------------------------------
+Ran 32 tests in 0.007s
+
+FAILED (failures=1)

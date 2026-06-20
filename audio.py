@@ -199,18 +199,18 @@ def record_vad(output_path: str = config.RECORDED_WAV) -> str:
             rms       = float(np.sqrt(np.mean(audio_f32 ** 2)))
 
             if use_silero:
-                tensor     = torch.from_numpy(audio_f32.squeeze())
+                tensor      = torch.from_numpy(audio_f32.squeeze())
                 speech_prob = float(model(tensor, config.SAMPLE_RATE).item())
                 is_speech   = speech_prob >= config.VAD_SILERO_THRESHOLD
             else:
                 # Energy fallback: dynamic threshold = noise_floor * 1.5 or 0.01
                 threshold   = max(_noise_floor * 1.5, 0.01) if _noise_floor else 0.01
-                speech_prob = rms / (threshold + 1e-9)   # pseudo-confidence ratio
+                speech_prob = rms / (threshold + 1e-9)
                 is_speech   = rms >= threshold
 
             # ── Per-chunk diagnostic ─────────────────────────────────────
             if config.VAD_DEBUG:
-                bar  = "█" * min(int(speech_prob * 20), 20) if use_silero else "█" * min(int(rms * 500), 20)
+                bar      = "█" * min(int(speech_prob * 20), 20) if use_silero else "█" * min(int(rms * 500), 20)
                 prob_str = f"prob={speech_prob:.3f}" if use_silero else f"RMS={rms:.5f}"
                 print(
                     f"    {elapsed:5.1f}s  {prob_str}  RMS={rms:.5f}  "

@@ -205,6 +205,20 @@ MEMORY_LONG_TERM_FILE  = os.path.join(MEMORY_DIR, "long_term.json")
 # 20 turns ≈ 400–1200 extra tokens — well within qwen3:1.7b's 32k context.
 MEMORY_SHORT_TERM_TURNS = 20
 
+# Minimum STT segment confidence (0.0–1.0) required before auto-saving long-term memory.
+# Uses the lowest segment confidence from the transcript (conservative gate).
+MEMORY_STT_MIN_CONFIDENCE = 0.8
+
+# Minimum extraction confidence (0.0–1.0) required to persist a memory item.
+# Regex extractions always use confidence=1.0; LLM items must meet this threshold.
+MEMORY_LLM_MIN_CONFIDENCE = 0.80
+
+# LLM-based memory extraction (second stage after regex).
+MEMORY_LLM_EXTRACTION_ENABLED = True
+MEMORY_LLM_MODEL = OLLAMA_MODEL          # reuse chat model; override for a faster model if needed
+MEMORY_LLM_NUM_PREDICT = 512             # JSON output is short
+MEMORY_LLM_TEMPERATURE = 0.1             # low temperature for structured extraction
+
 # ── Temp files ─────────────────────────────────────────────────────────────
 # Stored inside the project directory (not /tmp) to avoid macOS Spotlight
 # indexing spikes that cause audio underruns at playback start.
