@@ -34,6 +34,7 @@ import tts
 import config
 import extractor
 import memory_manager
+import memory
 
 
 def _sanitise(text: str) -> str:
@@ -166,12 +167,33 @@ def main():
                 response = direct_ans
                 t_llm = 0.0
             else:
-                print(f"  📤  [LLM] Sending prompt to LLM...")
+                print("  📤  [LLM] Sending prompt to LLM...")
                 t0 = time.monotonic()
                 response = llm.chat(user_text)
                 t_llm = time.monotonic() - t0
-                print(f"  ✅  [LLM] Response received.")
+                print("  ✅  [LLM] Response received.")
+                
+                # ── Pre-TTS Response Validator ────────────────────────────
+                # Actively correct the LLM if it hallucinates known core facts.
+                # 1. Name validation
+                if "my name" in clean_msg:
+                    stored_name = memory.get_profile().get("name")
+                    if stored_name and stored_name.lower() not in response.lower():
+                        print(f"  🛑  [Validator] LLM missed name. Overriding to '{stored_name}'.")
+                        response = f"{stored_name}."
+                # 2. Favorite color validation
+                if "favorite color" in clean_msg or "favourite color" in clean_msg:
+                    stored_color = memory_manager.get_value("preferences", "favorite_color")
+                    if stored_color:
+                        import retriever
+                        formatted_color = retriever._format_value(stored_color)
+                        if formatted_color.lower() not in response.lower():
+                            ans = formatted_color[0].upper() + formatted_color[1:] + "."
+                            print(f"  🛑  [Validator] LLM missed color. Overriding to '{ans}'.")
+                            response = ans
 
+            # Log memory and TTS start
+            memory.add_turn(user_text, response)
             last_interaction = time.monotonic()
             if follow_up_mode:
                 print("⏳ Follow-up timer reset")
