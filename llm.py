@@ -46,22 +46,24 @@ def _build_system_prompt() -> str:
 
     # 2. Append user profile block if available.
     profile = memory.get_profile()
-    if not profile:
-        return base
-
-    lines = [f"{key}: {value}" for key, value in profile.items()]
-    profile_block = (
-        "\n\n── USER PROFILE ─────────────────────────────────────────────────────────────────"
-        "\nThese are facts about the user. Use them naturally when relevant."
-        "\nDo not recite this list unprompted."
-        f"\n" + "\n".join(lines)
-    )
+    profile_block = ""
+    if profile:
+        lines = [f"{key}: {value}" for key, value in profile.items()]
+        profile_block = (
+            "\n\n── USER PROFILE ─────────────────────────────────────────────────────────────────"
+            "\nThese are facts about the user. Use them naturally when relevant."
+            "\nDo not recite this list unprompted."
+            f"\n" + "\n".join(lines)
+        )
     
     # 3. Append long-term memory context if available.
     long_term_block = memory_manager.build_memory_context()
     
-    return base + profile_block + long_term_block
-
+    # 4. Append short-term conversation context.
+    import context_manager
+    context_block = context_manager.get_context_prompt()
+    
+    return base + profile_block + long_term_block + context_block
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 _THINK_RE = re.compile(r"<think>.*?</think>", re.DOTALL)

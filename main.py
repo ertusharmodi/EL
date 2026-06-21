@@ -72,6 +72,8 @@ def main():
             # ── Check session timeout ─────────────────────────────────────────
             if session_mode and (now - last_interaction) >= SESSION_TIMEOUT:
                 session_mode = False
+                import context_manager
+                context_manager.clear_context()
                 print("🔴 Session expired")
                 print("😴 Sleep mode")
 
@@ -194,35 +196,44 @@ def main():
             # Use the resolved text for extraction and generation
             user_text = resolved_user_text
             
-            # ── Intent Classification ───────────────────────────────────────
-            import intent_classifier
-            intent = intent_classifier.classify_intent(user_text)
-            print(f"  🧠  Intent: {intent}")
+            # ── Tool Calling Layer ──────────────────────────────────────────
+            import tool_router
+            tool_name, tool_response = tool_router.route_tool(user_text)
             
             response = None
-            if intent == "GREETING":
-                if "good morning" in clean_msg:
-                    response = "Good morning."
-                else:
-                    response = "Hi."
-            elif intent == "THANKS":
-                response = "You're welcome."
-            elif intent == "GOODBYE":
-                print("  👋  Goodbye detected")
-                response = "See you later."
-                should_sleep = True
-            elif intent == "IDENTITY":
-                response = "I'm Eleven."
-            elif intent == "SMALL_TALK":
-                if "how are you" in clean_msg or "how's it going" in clean_msg:
-                    response = "I'm good. How about you?"
-                else:
-                    response = "Just talking with you."
-            elif intent == "ACKNOWLEDGEMENT":
-                if "i'll do it" in clean_msg or "ill do it" in clean_msg:
-                    response = "Sounds good."
-                else:
-                    response = "Alright."
+            if tool_response:
+                print(f"  🛠  Tool: {tool_name}")
+                response = tool_response
+                t_llm = 0.0
+            else:
+                # ── Intent Classification ───────────────────────────────────────
+                import intent_classifier
+                intent = intent_classifier.classify_intent(user_text)
+                print(f"  🧠  Intent: {intent}")
+                
+                if intent == "GREETING":
+                    if "good morning" in clean_msg:
+                        response = "Good morning."
+                    else:
+                        response = "Hi."
+                elif intent == "THANKS":
+                    response = "You're welcome."
+                elif intent == "GOODBYE":
+                    print("  👋  Goodbye detected")
+                    response = "See you later."
+                    should_sleep = True
+                elif intent == "IDENTITY":
+                    response = "I'm Eleven."
+                elif intent == "SMALL_TALK":
+                    if "how are you" in clean_msg or "how's it going" in clean_msg:
+                        response = "I'm good. How about you?"
+                    else:
+                        response = "Just talking with you."
+                elif intent == "ACKNOWLEDGEMENT":
+                    if "i'll do it" in clean_msg or "ill do it" in clean_msg:
+                        response = "Sounds good."
+                    else:
+                        response = "Alright."
             
             if response:
                 t_llm = 0.0
@@ -281,11 +292,13 @@ def main():
             t0 = time.monotonic()
             audio.play(wav_out)
             t_play = time.monotonic() - t0
-
+            import context_manager
             if should_sleep:
                 session_mode = False
+                context_manager.clear_context()
                 print("  😴  Sleep mode")
-
+            else:
+                context_manager.update_context_async(user_text, response)
             t_total = time.monotonic() - t_turn
             print(f"  ⏱   rec={t_rec:.1f}s  stt={t_stt:.1f}s  llm={t_llm:.1f}s  tts={t_tts:.1f}s  play={t_play:.1f}s  total={t_total:.1f}s")
             print()
