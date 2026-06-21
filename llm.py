@@ -27,7 +27,7 @@ _PERSONALITY_FILE = os.path.join(
 )
 
 
-def _build_system_prompt() -> str:
+def _build_system_prompt(user_text: str = "") -> str:
     """
     Assemble the full system prompt for every LLM call.
 
@@ -56,8 +56,8 @@ def _build_system_prompt() -> str:
             f"\n" + "\n".join(lines)
         )
     
-    # 3. Append long-term memory context if available.
-    long_term_block = memory_manager.build_memory_context()
+    # 3. Append long-term memory context if available (semantically filtered).
+    long_term_block = memory_manager.build_memory_context(user_text)
     
     # 4. Append short-term conversation context.
     import context_manager
@@ -88,8 +88,10 @@ def chat(user_text: str) -> str:
     Prints timing diagnostics: wall time, tokens generated, tokens/sec,
     thinking field character count.
     """
-    t0 = time.monotonic()
+    prompt_start = time.monotonic()
+    sys_prompt = _build_system_prompt(user_text)
     
+    # Prepend short-term history.
     hist = memory.get_history()
     print(f"  🧠  [MEMORY] context size: {len(hist) // 2} turns")
 
@@ -108,15 +110,16 @@ def chat(user_text: str) -> str:
             # Explicit temperature — ensures sampling diversity even with think=True.
             # 0.8 is a good balance: natural-sounding without hallucinating.
             "temperature":   config.OLLAMA_TEMPERATURE,
+            "top_p": config.OLLAMA_TOP_P,
         },
         messages=[
-            {"role": "system", "content": _build_system_prompt()},
+            {"role": "system", "content": sys_prompt},
             *hist,   # last N turns injected here
             {"role": "user",   "content": user_text},
         ],
     )
 
-    elapsed = time.monotonic() - t0
+    elapsed = time.monotonic() - prompt_start
 
     # message.content is the clean answer when think=True works correctly.
     # _clean() strips residual <think> tags as a safety net.

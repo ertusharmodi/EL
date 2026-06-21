@@ -270,9 +270,14 @@ def _format_nested(prefix: str, value: Any, lines: List[str]) -> int:
     return count
 
 
-def build_memory_context() -> str:
-    """Convert the JSON memory into clean natural language context."""
+def build_memory_context(user_query: str = "") -> str:
+    """Convert the JSON memory into clean natural language context using semantic retrieval."""
     mem = recall()
+    
+    if user_query:
+        import memory_retriever
+        mem = memory_retriever.retrieve_relevant(user_query, mem, top_k=3)
+        
     lines: List[str] = []
     fact_count = 0
 

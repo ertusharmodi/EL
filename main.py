@@ -152,6 +152,10 @@ def main():
                 if not user_text:
                     continue
 
+            # ── Speech Correction Layer ───────────────────────────────────────
+            import speech_corrector
+            user_text = speech_corrector.correct_transcript(user_text)
+
             # Remove old EXIT_COMMANDS check to let Intent Classifier handle it
             clean_msg = _sanitise(user_text)
             
@@ -201,6 +205,7 @@ def main():
             tool_name, tool_response = tool_router.route_tool(user_text)
             
             response = None
+            intent = None
             if tool_response:
                 print(f"  🛠  Tool: {tool_name}")
                 response = tool_response
@@ -208,46 +213,23 @@ def main():
             else:
                 # ── Intent Classification ───────────────────────────────────────
                 import intent_classifier
+                import response_policy
+                
                 intent = intent_classifier.classify_intent(user_text)
                 print(f"  🧠  Intent: {intent}")
                 
-                if intent == "GREETING":
-                    if "good morning" in clean_msg:
-                        response = "Good morning."
-                    else:
-                        response = "Hi."
-                elif intent == "THANKS":
-                    response = "You're welcome."
-                elif intent == "GOODBYE":
+                if intent == "GOODBYE":
                     print("  👋  Goodbye detected")
-                    response = "See you later."
-                    should_sleep = True
-                elif intent == "IDENTITY":
-                    response = "I'm Eleven."
-                elif intent == "SMALL_TALK":
-                    if "how are you" in clean_msg or "how's it going" in clean_msg:
-                        response = "I'm good. How about you?"
-                    else:
-                        response = "Just talking with you."
-                elif intent == "ACKNOWLEDGEMENT":
-                    if "i'll do it" in clean_msg or "ill do it" in clean_msg:
-                        response = "Sounds good."
-                    else:
-                        response = "Alright."
+                    
+                response, should_sleep = response_policy.apply_policy(intent, user_text)
+            
+            # Extract facts for new statements (even if we bypass conversational LLM)
+            if intent in ("MEMORY_UPDATE", "UNKNOWN"):
+                extractor.run_extraction_and_save(user_text, stt_confidence)
             
             if response:
                 t_llm = 0.0
             else:
-                # Extract facts before generating the response
-                extractor.run_extraction_and_save(user_text, stt_confidence)
-                
-                import retriever
-                direct_ans = retriever.retrieve_direct_answer(user_text)
-                
-                if direct_ans:
-                    response = direct_ans
-                    t_llm = 0.0
-                else:
                     print("  📤  [LLM] Sending prompt to LLM...")
                     t0 = time.monotonic()
                     response = llm.chat(user_text)

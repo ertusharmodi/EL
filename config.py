@@ -108,7 +108,7 @@ WHISPER_SEGMENT_CONFIDENCE_THRESHOLD = 0.6
 SILENCE_THRESHOLD = 0.01
 
 # ── LLM (Ollama) ───────────────────────────────────────────────────
-OLLAMA_MODEL = "qwen3:1.7b"  # Fastest qwen3 model with good Hinglish quality.
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL",  "qwen3:8b")  # Fastest qwen3 model with good Hinglish quality.
                              # qwen3:4b generates 2,200–3,200 thinking tokens per query (~44s).
                              # qwen3:1.7b generates ~500–800 thinking tokens (~10s).
                              # Switch back to qwen3:4b for better quality if latency is acceptable.
@@ -129,7 +129,9 @@ OLLAMA_REPEAT_PENALTY = 1.3
 
 # Sampling temperature. 0.8 = natural diversity without hallucination.
 # Setting explicitly prevents Ollama's default from varying across versions.
-OLLAMA_TEMPERATURE = 0.8
+OLLAMA_TEMPERATURE = 0.2
+
+OLLAMA_TOP_P = 0.75
 
 
 # Fallback system prompt used if personality.txt cannot be found.

@@ -52,10 +52,6 @@ class TestTools(unittest.TestCase):
         self.assertIsNone(system_tool.execute("hello"))
         
     def test_tool_router(self):
-        # Route datetime
-        t, r = tool_router.route_tool("what time is it")
-        self.assertEqual(t, "datetime")
-        self.assertIsNotNone(r)
         
         # Route math
         t, r = tool_router.route_tool("what is 10 * 10")

@@ -8,12 +8,7 @@ def route_tool(user_text: str) -> Tuple[Optional[str], Optional[str]]:
     Returns (None, None) if no tools match.
     """
     
-    # 1. Date/Time Tool
-    dt_resp = datetime_tool.execute(user_text)
-    if dt_resp is not None:
-        return "datetime", dt_resp
-        
-    # 2. System Tool
+    # 1. System Tool
     sys_resp = system_tool.execute(user_text)
     if sys_resp is not None:
         return "system", sys_resp
