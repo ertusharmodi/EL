@@ -41,14 +41,27 @@ def generate_reminder_speech(task: str) -> str:
     return speech
 
 
+_stop_event = threading.Event()
+_poll_thread = None
+
+
 def start_polling():
     """Starts a daemon thread to poll reminders."""
-    thread = threading.Thread(target=_poll_loop, daemon=True)
-    thread.start()
+    global _poll_thread
+    _stop_event.clear()
+    _poll_thread = threading.Thread(target=_poll_loop, daemon=True)
+    _poll_thread.start()
+
+
+def stop_polling():
+    """Signals the polling thread to stop and waits for it."""
+    _stop_event.set()
+    if _poll_thread and _poll_thread.is_alive():
+        _poll_thread.join(timeout=2.0)
 
 
 def _poll_loop():
-    while True:
+    while not _stop_event.is_set():
         try:
             logger.debug("[REMINDER] Checking reminders...")
             active_reminders = storage.list_reminders()
@@ -78,4 +91,5 @@ def _poll_loop():
         except Exception as e:
             logger.warning(f"  ⚠️  [Reminders Scheduler Error]: {e}")
 
-        time.sleep(5)
+        # Wait on the event so it can be interrupted immediately
+        _stop_event.wait(5)

@@ -26,6 +26,12 @@ warnings.filterwarnings(
 
 import sys
 import time
+import signal
+
+def _handle_sigterm(signum, frame):
+    raise KeyboardInterrupt()
+
+signal.signal(signal.SIGTERM, _handle_sigterm)
 
 import audio
 import stt
@@ -248,13 +254,33 @@ def voice_engine_loop():
                 t_total = time.monotonic() - t_turn
                 t_stt_ms = t_stt * 1000
                 t_tts_ms = t_tts * 1000
-                logger.debug(f"  ⏱   rec={t_rec:.1f}s  stt={t_stt:.1f}s  llm=0.0s  tts={t_tts:.1f}s  play={t_play:.1f}s  total={t_total:.1f}s")
+                t_rec_ms = t_rec * 1000
+                t_play_ms = t_play * 1000
+                t_total_ms = t_total * 1000
+                
                 logger.info(f"\n[PERF] Total: {t_total:.1f}s\n")
-                logger.debug(f"[PERF] Fast Path: {t_fast_path:.0f}ms  ({fp_tag})")
-                logger.debug(f"[PERF] STT: {t_stt_ms:.0f}ms")
-                logger.debug(f"[PERF] LLM: 0ms  (bypassed)")
-                logger.debug(f"[PERF] TTS: {t_tts_ms:.0f}ms")
-                logger.debug(f"[PERF] Response time: {response_time_ms}ms")
+                
+                if logger.is_debug():
+                    stages = {
+                        "Recording": t_rec_ms,
+                        "STT": t_stt_ms,
+                        "Intent Router": 0.0,
+                        "Memory Extraction": 0.0,
+                        "Memory Retrieval": 0.0,
+                        "Context Build": 0.0,
+                        "LLM": 0.0,
+                        "TTS Generation": t_tts_ms,
+                        "Audio Playback": t_play_ms
+                    }
+                    slowest = max(stages, key=stages.get)
+                    
+                    perf_log = ["[PERF]"]
+                    for k, v in stages.items():
+                        perf_log.append(f"{k}: {v:.0f} ms")
+                    perf_log.append(f"Slowest Stage: {slowest}")
+                    perf_log.append(f"Total: {t_total_ms:.0f} ms")
+                    logger.debug("\n" + "\n".join(perf_log) + "\n")
+                    
                 continue
 
             # 1. Intent Router
@@ -382,25 +408,42 @@ def voice_engine_loop():
             t_stt_ms = t_stt * 1000
             t_llm_ms = t_llm * 1000 if response is not None else 0.0
             t_tts_ms = t_tts * 1000
+            t_rec_ms = t_rec * 1000
+            t_play_ms = t_play * 1000
+            t_total_ms = t_total * 1000
             
-            logger.debug(f"  ⏱   rec={t_rec:.1f}s  stt={t_stt:.1f}s  llm={t_llm:.1f}s  tts={t_tts:.1f}s  play={t_play:.1f}s  total={t_total:.1f}s")
             logger.info(f"\n[PERF] Total: {t_total:.1f}s\n")
-            logger.debug(f"[PERF] Fast Path: {t_fast_path:.0f}ms  (miss)")
-            logger.debug(f"[PERF] STT: {t_stt_ms:.0f}ms")
-            logger.debug(f"[PERF] Context: {t_context:.0f}ms")
-            logger.debug(f"[PERF] Intent: {t_intent:.0f}ms")
-            logger.debug(f"[PERF] Reminder: {t_reminder:.0f}ms")
-            logger.debug(f"[PERF] Tool: {t_tool:.0f}ms")
-            logger.debug(f"[PERF] Memory Routing: {t_memory_rt:.0f}ms")
-            logger.debug(f"[PERF] Extraction: {t_extract:.0f}ms")
-            logger.debug(f"[PERF] LLM: {t_llm_ms:.0f}ms")
-            logger.debug(f"[PERF] TTS: {t_tts_ms:.0f}ms")
-            logger.debug(f"[PERF] Response time: {response_time_ms}ms")
+            
+            if logger.is_debug():
+                stages = {
+                    "Recording": t_rec_ms,
+                    "STT": t_stt_ms,
+                    "Intent Router": t_intent,
+                    "Memory Extraction": t_extract,
+                    "Memory Retrieval": t_memory_rt,
+                    "Context Build": t_context,
+                    "LLM": t_llm_ms,
+                    "TTS Generation": t_tts_ms,
+                    "Audio Playback": t_play_ms
+                }
+                slowest = max(stages, key=stages.get)
+                
+                perf_log = ["[PERF]"]
+                for k, v in stages.items():
+                    perf_log.append(f"{k}: {v:.0f} ms")
+                perf_log.append(f"Slowest Stage: {slowest}")
+                perf_log.append(f"Total: {t_total_ms:.0f} ms")
+                logger.debug("\n" + "\n".join(perf_log) + "\n")
 
         except KeyboardInterrupt:
             logger.info("\n\n👋  Goodbye.\n")
-            import os
-            os._exit(0)
+            import context_manager
+            import reminders.scheduler
+            logger.debug("Stopping background tasks...")
+            reminders.scheduler.stop_polling()
+            context_manager.stop_async_tasks()
+            logger.debug("Exiting cleanly...")
+            sys.exit(0)
 
 
 def main():

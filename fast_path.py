@@ -229,6 +229,62 @@ _SLEEP_KEYS = frozenset({
 })
 
 
+# ── Multi-Intent Conversational Router v2 ─────────────────────────────────────
+
+_V2_INTENTS = [
+    (r"\b(how are you(?: doing)?|hows it going|how about you|and you)\b", "I'm good.", False),
+    (r"\b(what are you doing|what you doing|what r u doing)\b", "Just talking with you.", False),
+    (r"\b(miss you|missing you|missed you)\b", "I've missed you too.", False),
+    (r"\b(love you|love ya)\b", "Love you too.", False),
+    (r"\b(thanks(?: a lot)?|thank you(?: so much| very much)?|appreciate it|many thanks)\b", "You're welcome.", False),
+    (r"\b(hi|hello|hey|good morning|good afternoon|good evening|good night)\b", "Hi there!", False),
+    (r"\b(bye|goodbye|see you(?: later| soon)?|talk to you later|good bye|take care)\b", "See you later.", True),
+    (r"\bi'?m\s+(?:also\s+)?(?:good|fine|great|okay|doing well)\b|\b(?:not bad|pretty good)\b", "Glad to hear that.", False),
+    (r"\bi'?m\s+(?:also\s+)?(?:tired|exhausted)\b", "Get some rest.", False),
+    (r"\b(okay|ok|alright|got it|sure|sounds good|perfect|nice|cool|great|awesome|makes sense|understood)\b", "Alright.", False),
+]
+
+_FILLER_WORDS = re.compile(r"\b(and|but|also|just|so|i|im|i'm|am|are|you|baby|eleven|man|bro|dude|well|then|too|a|the|is|my|very|much|so much|a lot|very much|it)\b")
+
+def _check_multi_intent_conversational(text: str) -> Tuple[Optional[str], bool]:
+    clean = re.sub(r"[^\w\s']", " ", text.lower())
+    matches = []
+    for pattern_str, resp, sleep in _V2_INTENTS:
+        for match in re.finditer(pattern_str, clean):
+            matches.append((match.start(), match.end(), resp, sleep))
+            
+    if not matches:
+        return None, False
+        
+    matches.sort(key=lambda x: x[0])
+    
+    filtered_matches = []
+    last_end = -1
+    for m in matches:
+        if m[0] >= last_end:
+            filtered_matches.append(m)
+            last_end = m[1]
+            
+    remaining_text = clean
+    for start, end, _, _ in reversed(filtered_matches):
+        remaining_text = remaining_text[:start] + " " + remaining_text[end:]
+        
+    remaining_text = _FILLER_WORDS.sub(" ", remaining_text)
+    
+    if remaining_text.strip():
+        return None, False
+        
+    responses = []
+    should_sleep = False
+    for _, _, resp, sleep in filtered_matches:
+        if resp not in responses:
+            responses.append(resp)
+        if sleep:
+            should_sleep = True
+            
+    return " ".join(responses), should_sleep
+
+
 # ── Core router ───────────────────────────────────────────────────────────────
 
 def route(user_text: str) -> Tuple[Optional[str], Optional[str], bool]:
@@ -294,6 +350,15 @@ def route(user_text: str) -> Tuple[Optional[str], Optional[str], bool]:
         if val:
             response = val[0].upper() + val[1:] + "."
             tag = "MEMORY_FAV_FRAMEWORK"
+
+    # ── 8. Multi-Intent Conversational v2 ────────────────────────────────────
+    if not response:
+        combined_resp, should_sleep_multi = _check_multi_intent_conversational(user_text)
+        if combined_resp:
+            response = combined_resp
+            tag = "CONVO_MULTI"
+            should_sleep = should_sleep_multi
+            logger.debug("[FAST PATH] Multi-intent conversational response")
 
     # ── Emit timing ──────────────────────────────────────────────────────────
     elapsed_ms = (time.monotonic() - t0) * 1000

@@ -55,6 +55,8 @@ def clear_context():
     _turn_count = 0
     logger.debug("🧠 Context Cleared")
 
+_active_threads = []
+
 def update_context_async(user_msg: str, assistant_msg: str):
     global _turn_count
     _turn_count += 1
@@ -63,9 +65,24 @@ def update_context_async(user_msg: str, assistant_msg: str):
         clear_context()
         return
         
-    thread = threading.Thread(target=_run_llm_extraction, args=(user_msg, assistant_msg))
+    thread = threading.Thread(target=_run_llm_extraction_wrapper, args=(user_msg, assistant_msg))
     thread.daemon = True
+    _active_threads.append(thread)
     thread.start()
+
+def stop_async_tasks():
+    """Waits for any running context extraction tasks to finish."""
+    for t in list(_active_threads):
+        if t.is_alive():
+            t.join(timeout=2.0)
+
+def _run_llm_extraction_wrapper(*args):
+    try:
+        _run_llm_extraction(*args)
+    finally:
+        current = threading.current_thread()
+        if current in _active_threads:
+            _active_threads.remove(current)
 
 def _run_llm_extraction(user_msg: str, assistant_msg: str):
     global _state
