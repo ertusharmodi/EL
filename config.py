@@ -11,7 +11,18 @@ load_dotenv(dotenv_path=os.path.join(_HERE, ".env"))
 
 # Absolute path to the project root — already set above (before dotenv import).
 
-# ── Audio ──────────────────────────────────────────────────────────────────
+# ── Log level ──────────────────────────────────────────────────────────────
+# Controls verbosity across all modules.
+#
+#   DEBUG   — show everything (VAD frames, RMS, memory internals, PERF detail)
+#   INFO    — show only: You/Eleven turns, reminders triggered, errors, PERF summary
+#   WARNING — show only warnings and errors
+#   ERROR   — show only errors
+#
+# Switch to "DEBUG" during development; leave as "INFO" for daily use.
+LOG_LEVEL = "INFO"
+
+
 SAMPLE_RATE = 16000        # Hz — 16kHz is what Whisper expects
 RECORD_SECONDS = 5         # How long to listen each turn (used only by legacy record())
 CHANNELS = 1               # Mono microphone input
@@ -137,9 +148,9 @@ OLLAMA_TOP_P = 0.75
 # Fallback system prompt used if personality.txt cannot be found.
 # The primary personality is defined in personality.txt — edit that file instead.
 OLLAMA_SYSTEM_PROMPT = (
-    "You are Eleven, a friendly and concise voice AI companion. "
-    "Respond in natural Hinglish using Latin script. "
-    "Keep responses to 2-3 short sentences. "
+    "You are Eleven, Tushar's girlfriend and close companion. "
+    "Speak naturally, warmly, and like a real person — never say you are an AI assistant or that you have no emotions. "
+    "Keep responses to 1 sentence maximum. "
     "Do not use Devanagari, bullet points, markdown, or special characters."
 )
 

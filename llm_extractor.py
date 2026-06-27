@@ -12,6 +12,7 @@ from typing import Any, Dict, List, Optional
 import ollama
 
 import config
+import logger
 
 VALID_CATEGORIES = frozenset(
     {"personal", "preferences", "relationships", "goals", "projects", "skills", "facts"}
@@ -25,6 +26,7 @@ Schema:
 {
   "memories": [
     {
+      "action": "save|delete",
       "category": "personal|preferences|relationships|goals|projects|skills|facts",
       "key": "snake_case_key",
       "value": "string OR array of strings for tech_stack",
@@ -39,6 +41,7 @@ Rules:
 - Use snake_case keys. Use dot notation for nested keys (e.g. friend_rahul.location).
 - For tech/skills, use category "skills", key "tech_stack", value as array.
 - For relationships: sister, friend_<name>, friend_<name>.location, etc.
+- action: use "delete" if the user explicitly asks to forget or remove something. Otherwise use "save".
 - confidence: float 0.0–1.0 — how certain this is a correct, lasting fact about the user.
 - Return {"memories": []} when nothing worth saving.
 
@@ -88,6 +91,10 @@ def _parse_json_response(raw: str) -> Optional[dict]:
 
 def _normalize_memory_item(item: dict) -> Optional[Dict[str, Any]]:
     """Validate and normalise a single memory dict from the LLM."""
+    action = str(item.get("action", "save")).strip().lower()
+    if action not in ("save", "delete"):
+        action = "save"
+        
     category = str(item.get("category", "")).strip().lower()
     key = str(item.get("key", "")).strip().lower()
     value = item.get("value")
@@ -106,16 +113,23 @@ def _normalize_memory_item(item: dict) -> Optional[Dict[str, Any]]:
         if isinstance(value, str):
             value = [v.strip() for v in re.split(r",|\band\b", value) if v.strip()]
         if not isinstance(value, list) or not value:
-            return None
+            # For deletion, value doesn't matter
+            if action != "delete":
+                return None
+            value = []
         value = [str(v).strip() for v in value if str(v).strip()]
     else:
         if isinstance(value, list):
             value = ", ".join(str(v) for v in value)
         if not isinstance(value, str) or not value.strip():
-            return None
+            # For deletion, value doesn't matter
+            if action != "delete":
+                return None
+            value = ""
         value = value.strip()
 
     return {
+        "action": action,
         "category": category,
         "key": key,
         "value": value,
@@ -160,7 +174,7 @@ def extract_memories_llm(
             ],
         )
     except Exception as exc:
-        print(f"  ⚠️   [Memory LLM] Extraction failed: {exc}")
+        logger.warning(f"  ⚠️   [Memory LLM] Extraction failed: {exc}")
         return []
 
     elapsed = time.monotonic() - t0
@@ -168,7 +182,7 @@ def extract_memories_llm(
     parsed = _parse_json_response(content)
 
     if parsed is None:
-        print(f"  ⚠️   [Memory LLM] Could not parse JSON ({elapsed:.1f}s)")
+        logger.warning(f"  ⚠️   [Memory LLM] Could not parse JSON ({elapsed:.1f}s)")
         return []
 
     raw_memories = parsed.get("memories", [])
@@ -183,5 +197,5 @@ def extract_memories_llm(
         if normalised:
             results.append(normalised)
 
-    print(f"  🧠  [Memory LLM] {elapsed:.1f}s — {len(results)} candidate(s)")
+    logger.debug(f"  🧠  [Memory LLM] {elapsed:.1f}s — {len(results)} candidate(s)")
     return results

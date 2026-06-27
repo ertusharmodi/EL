@@ -7,7 +7,10 @@ def execute(user_text: str) -> str:
     """
     clean = user_text.lower()
     
-    triggers = ["memory usage", "ram usage", "cpu usage", "disk usage", "system stats"]
+    triggers = [
+        "memory usage", "ram usage", "cpu usage", "disk usage", 
+        "system stats", "how much ram", "system info"
+    ]
     
     if any(t in clean for t in triggers):
         # We'll just return a combined summary of CPU and RAM for any of these

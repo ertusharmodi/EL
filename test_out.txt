@@ -1,0 +1,137 @@
+.....................................🧠 DEBUG: [8] Successfully wrote long_term.json to /var/folders/hb/z_pztknd2xzfw0yw4m28j1tc0000gn/T/tmp_xhfu2qt/long_term.json
+  🧠  [Memory] Loaded 7 categories
+🧠 DEBUG: [1] User message received: 'My birthplace is Harmangrad Rajasthan'
+🧠 DEBUG: [2] STT confidence: 1.0
+🧠 DEBUG: [3] Regex extraction result: [{'category': 'personal', 'key': 'birthplace', 'value': 'Harmangrad Rajasthan', 'confidence': 1.0, 'source': 'regex'}]
+🧠 DEBUG: [4] LLM extraction result: []
+🧠 DEBUG: [5] Merged memories: [{'category': 'personal', 'key': 'birthplace', 'value': 'Harmangrad Rajasthan', 'confidence': 1.0, 'source': 'regex'}]
+  🧠  Extracted Memory (save)
+  personal.birthplace = Harmangrad Rajasthan
+  🧠  Confidence: 100% (regex)
+🧠 DEBUG: [6] Confidence filtering: 1.0 >= 0.8
+🧠 DEBUG: [7] Memory save operation started for personal.birthplace = Harmangrad Rajasthan
+🧠 DEBUG: [8] Successfully wrote long_term.json to /var/folders/hb/z_pztknd2xzfw0yw4m28j1tc0000gn/T/tmp_xhfu2qt/long_term.json
+🧠 DEBUG: [7] Memory save operation returned action: saved
+  🧠  Saved Memory
+  personal.birthplace = Harmangrad Rajasthan
+🧠 DEBUG: [8] Successfully wrote long_term.json to /var/folders/hb/z_pztknd2xzfw0yw4m28j1tc0000gn/T/tmpuyowxdle/long_term.json
+  🧠  [Memory] Loaded 7 categories
+🧠 DEBUG: [8] Successfully wrote long_term.json to /var/folders/hb/z_pztknd2xzfw0yw4m28j1tc0000gn/T/tmpuyowxdle/long_term.json
+🧠 DEBUG: [8] Successfully wrote long_term.json to /var/folders/hb/z_pztknd2xzfw0yw4m28j1tc0000gn/T/tmpkmnhku_5/long_term.json
+  🧠  [Memory] Loaded 7 categories
+🧠 DEBUG: [1] User message received: 'My sister is a teacher.'
+🧠 DEBUG: [2] STT confidence: 1.0
+🧠 DEBUG: [3] Regex extraction result: []
+🧠 DEBUG: [4] LLM extraction result: [{'category': 'relationships', 'key': 'sister', 'value': 'teacher', 'confidence': 0.95, 'source': 'llm'}]
+🧠 DEBUG: [5] Merged memories: [{'category': 'relationships', 'key': 'sister', 'value': 'teacher', 'confidence': 0.95, 'source': 'llm'}]
+  🧠  Extracted Memory (save)
+  relationships.sister = teacher
+  🧠  Confidence: 95% (llm)
+🧠 DEBUG: [6] Confidence filtering: 0.95 >= 0.8
+🧠 DEBUG: [7] Memory save operation started for relationships.sister = teacher
+🧠 DEBUG: [8] Successfully wrote long_term.json to /var/folders/hb/z_pztknd2xzfw0yw4m28j1tc0000gn/T/tmpkmnhku_5/long_term.json
+🧠 DEBUG: [7] Memory save operation returned action: saved
+  🧠  Saved Memory
+  relationships.sister = teacher
+🧠 DEBUG: [8] Successfully wrote long_term.json to /var/folders/hb/z_pztknd2xzfw0yw4m28j1tc0000gn/T/tmpwzmap69r/long_term.json
+  🧠  [Memory] Loaded 7 categories
+🧠 DEBUG: [8] Successfully wrote long_term.json to /var/folders/hb/z_pztknd2xzfw0yw4m28j1tc0000gn/T/tmpp40chat7/long_term.json
+  🧠  [Memory] Loaded 7 categories
+🧠 DEBUG: [8] Successfully wrote long_term.json to /var/folders/hb/z_pztknd2xzfw0yw4m28j1tc0000gn/T/tmpbven31db/long_term.json
+  🧠  [Memory] Loaded 7 categories
+🧠 DEBUG: [1] User message received: 'I use Laravel, PHP and React'
+🧠 DEBUG: [2] STT confidence: 1.0
+🧠 DEBUG: [3] Regex extraction result: [{'category': 'skills', 'key': 'tech_stack', 'value': ['Laravel', 'PHP', 'React'], 'confidence': 1.0, 'source': 'regex'}]
+🧠 DEBUG: [4] LLM extraction result: []
+🧠 DEBUG: [5] Merged memories: [{'category': 'skills', 'key': 'tech_stack', 'value': ['Laravel', 'PHP', 'React'], 'confidence': 1.0, 'source': 'regex'}]
+  🧠  Extracted Memory (save)
+  skills.tech_stack = Laravel, PHP, React
+  🧠  Confidence: 100% (regex)
+🧠 DEBUG: [6] Confidence filtering: 1.0 >= 0.8
+🧠 DEBUG: [7] Memory save operation started for skills.tech_stack = ['Laravel', 'PHP', 'React']
+🧠 DEBUG: [8] Successfully wrote long_term.json to /var/folders/hb/z_pztknd2xzfw0yw4m28j1tc0000gn/T/tmpbven31db/long_term.json
+🧠 DEBUG: [7] Memory save operation returned action: saved
+  🧠  Saved Memory
+  skills.tech_stack = Laravel, PHP, React
+🧠 DEBUG: [1] User message received: 'I mostly work with Node.js and Laravel'
+🧠 DEBUG: [2] STT confidence: 1.0
+🧠 DEBUG: [3] Regex extraction result: [{'category': 'skills', 'key': 'tech_stack', 'value': ['Node.js', 'Laravel'], 'confidence': 1.0, 'source': 'regex'}]
+🧠 DEBUG: [4] LLM extraction result: []
+🧠 DEBUG: [5] Merged memories: [{'category': 'skills', 'key': 'tech_stack', 'value': ['Node.js', 'Laravel'], 'confidence': 1.0, 'source': 'regex'}]
+  🧠  Extracted Memory (save)
+  skills.tech_stack = Node.js, Laravel
+  🧠  Confidence: 100% (regex)
+🧠 DEBUG: [6] Confidence filtering: 1.0 >= 0.8
+🧠 DEBUG: [7] Memory save operation started for skills.tech_stack = ['Node.js', 'Laravel']
+  🧠 Merge Decision
+  Old Value: ['Laravel', 'PHP', 'React']
+  New Value: ['Node.js', 'Laravel']
+  Final Value: ['Laravel', 'PHP', 'React', 'Node.js']
+🧠 DEBUG: [8] Successfully wrote long_term.json to /var/folders/hb/z_pztknd2xzfw0yw4m28j1tc0000gn/T/tmpbven31db/long_term.json
+🧠 DEBUG: [7] Memory save operation returned action: updated
+  🧠  Updated Memory
+  skills.tech_stack = Node.js, Laravel
+🧠 DEBUG: [8] Successfully wrote long_term.json to /var/folders/hb/z_pztknd2xzfw0yw4m28j1tc0000gn/T/tmp_7kakenf/long_term.json
+  🧠  [Memory] Loaded 7 categories
+🧠 DEBUG: [1] User message received: 'My friend Rahul lives in Jaipur.'
+🧠 DEBUG: [2] STT confidence: 1.0
+🧠 DEBUG: [3] Regex extraction result: []
+🧠 DEBUG: [4] LLM extraction result: [{'category': 'relationships', 'key': 'friend_rahul.location', 'value': 'Jaipur', 'confidence': 0.93, 'source': 'llm'}]
+🧠 DEBUG: [5] Merged memories: [{'category': 'relationships', 'key': 'friend_rahul.location', 'value': 'Jaipur', 'confidence': 0.93, 'source': 'llm'}]
+  🧠  Extracted Memory (save)
+  relationships.friend_rahul.location = Jaipur
+  🧠  Confidence: 93% (llm)
+🧠 DEBUG: [6] Confidence filtering: 0.93 >= 0.8
+🧠 DEBUG: [7] Memory save operation started for relationships.friend_rahul.location = Jaipur
+🧠 DEBUG: [8] Successfully wrote long_term.json to /var/folders/hb/z_pztknd2xzfw0yw4m28j1tc0000gn/T/tmp_7kakenf/long_term.json
+🧠 DEBUG: [7] Memory save operation returned action: saved
+  🧠  Saved Memory
+  relationships.friend_rahul.location = Jaipur
+🧠 DEBUG: [8] Successfully wrote long_term.json to /var/folders/hb/z_pztknd2xzfw0yw4m28j1tc0000gn/T/tmp36f35qgc/long_term.json
+  🧠  [Memory] Loaded 7 categories
+🧠 DEBUG: [8] Successfully wrote long_term.json to /var/folders/hb/z_pztknd2xzfw0yw4m28j1tc0000gn/T/tmpyzq8wmcf/long_term.json
+  🧠  [Memory] Loaded 7 categories
+🧠 DEBUG: [1] User message received: 'My favorite color is black'
+🧠 DEBUG: [2] STT confidence: 1.0
+🧠 DEBUG: [3] Regex extraction result: [{'category': 'preferences', 'key': 'favorite_color', 'value': 'black', 'confidence': 1.0, 'source': 'regex'}]
+🧠 DEBUG: [4] LLM extraction result: []
+🧠 DEBUG: [5] Merged memories: [{'category': 'preferences', 'key': 'favorite_color', 'value': 'black', 'confidence': 1.0, 'source': 'regex'}]
+  🧠  Extracted Memory (save)
+  preferences.favorite_color = black
+  🧠  Confidence: 100% (regex)
+🧠 DEBUG: [6] Confidence filtering: 1.0 >= 0.8
+🧠 DEBUG: [7] Memory save operation started for preferences.favorite_color = black
+🧠 DEBUG: [7] Memory save operation returned action: unchanged
+  🧠  Unchanged Memory (Already known)
+  preferences.favorite_color = black
+🧠 DEBUG: [8] Successfully wrote long_term.json to /var/folders/hb/z_pztknd2xzfw0yw4m28j1tc0000gn/T/tmpcm7xd_2i/long_term.json
+  🧠  [Memory] Loaded 7 categories
+🧠 DEBUG: [1] User message received: 'My favorite color is black'
+🧠 DEBUG: [2] STT confidence: 1.0
+🧠 DEBUG: [3] Regex extraction result: [{'category': 'preferences', 'key': 'favorite_color', 'value': 'black', 'confidence': 1.0, 'source': 'regex'}]
+🧠 DEBUG: [4] LLM extraction result: []
+🧠 DEBUG: [5] Merged memories: [{'category': 'preferences', 'key': 'favorite_color', 'value': 'black', 'confidence': 1.0, 'source': 'regex'}]
+  🧠  Extracted Memory (save)
+  preferences.favorite_color = black
+  🧠  Confidence: 100% (regex)
+🧠 DEBUG: [6] Confidence filtering: 1.0 >= 0.8
+.........
+----------------------------------------------------------------------
+Ran 46 tests in 0.042s
+
+OK
+🧠 DEBUG: [7] Memory save operation started for preferences.favorite_color = black
+🧠 DEBUG: [7] Memory save operation returned action: unchanged
+  🧠  Unchanged Memory (Already known)
+  preferences.favorite_color = black
+  ⏰  [Reminders] Completed 1
+  ⏰  [Reminders] Completed code
+  ⏰  [Reminders] Created: 'go to the gym' due at 2026-06-28T09:00:00
+  ⏰  [Reminders] Deleted 1
+  ⏰  [Reminders] List requested. Found 0.
+  ⏰  [Reminders] List requested. Found 2.
+[REMINDER] Checking reminders...
+[REMINDER] Due reminder found
+[REMINDER] Triggered: Drink water
+[REMINDER] Marked completed
+[REMINDER] Checking reminders...

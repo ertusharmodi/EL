@@ -1,22 +1,22 @@
 import unittest
 from unittest.mock import patch
 
-from tools import calculator_tool, datetime_tool, system_tool
+from tools import calculator, datetime_tool, system_tool, app_launcher
 import tool_router
 
 class TestTools(unittest.TestCase):
     
     def test_calculator_tool(self):
-        self.assertEqual(calculator_tool.execute("2+2"), "4")
-        self.assertEqual(calculator_tool.execute("45*76"), "3420")
-        self.assertEqual(calculator_tool.execute("calculate 900/12"), "75")
-        self.assertEqual(calculator_tool.execute("what is 5 + 5?"), "10")
+        self.assertEqual(calculator.execute("2+2"), "4")
+        self.assertEqual(calculator.execute("45*76"), "3420")
+        self.assertEqual(calculator.execute("calculate 900/12"), "75")
+        self.assertEqual(calculator.execute("what is 5 + 5?"), "10")
         
         # Non-math queries should return None
-        self.assertIsNone(calculator_tool.execute("hello"))
-        self.assertIsNone(calculator_tool.execute("what is your name"))
+        self.assertIsNone(calculator.execute("hello"))
+        self.assertIsNone(calculator.execute("what is your name"))
         # Just a number is not math
-        self.assertIsNone(calculator_tool.execute("12"))
+        self.assertIsNone(calculator.execute("12"))
         
     def test_datetime_tool(self):
         # We can't strictly assert the exact string since time changes, but we check pattern
@@ -50,6 +50,37 @@ class TestTools(unittest.TestCase):
             self.assertEqual(resp_disk, "CPU is at 12.0%, RAM is at 45.0%, and Disk is 80.0% full.")
             
         self.assertIsNone(system_tool.execute("hello"))
+        
+    @patch('subprocess.run')
+    def test_app_launcher_tool(self, mock_run):
+        resp = app_launcher.execute("open cursor")
+        self.assertEqual(resp, "Opening Cursor.")
+        mock_run.assert_called_with(["open", "-a", "Cursor"], check=True, capture_output=True)
+        
+        resp2 = app_launcher.execute("open vscode")
+        self.assertEqual(resp2, "Opening Visual Studio Code.")
+        mock_run.assert_called_with(["open", "-a", "Visual Studio Code"], check=True, capture_output=True)
+        
+        # Test error handling
+        import subprocess
+        mock_run.side_effect = subprocess.CalledProcessError(1, "cmd")
+        resp3 = app_launcher.execute("open spotify")
+        self.assertEqual(resp3, "I couldn't open Spotify.")
+        
+        # Test dynamic app handling (WhatsApp)
+        mock_run.return_value = None
+        mock_run.side_effect = None
+        resp4 = app_launcher.execute("open whatsapp")
+        self.assertEqual(resp4, "Opening WhatsApp.")
+        mock_run.assert_called_with(["open", "-a", "WhatsApp"], check=True, capture_output=True)
+        
+        # Test unknown dynamic app handling
+        resp5 = app_launcher.execute("open door")
+        self.assertEqual(resp5, "Opening Door.")
+        mock_run.assert_called_with(["open", "-a", "Door"], check=True, capture_output=True)
+        
+        # Non-open query
+        self.assertIsNone(app_launcher.execute("launch cursor"))
         
     def test_tool_router(self):
         

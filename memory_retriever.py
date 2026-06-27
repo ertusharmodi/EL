@@ -1,4 +1,5 @@
 import json
+import logger
 import math
 from typing import Dict, List, Tuple, Any
 
@@ -13,7 +14,7 @@ def _get_embedding(text: str) -> List[float]:
         res = ollama.embeddings(model=_EMBED_MODEL, prompt=text)
         return res.get("embedding", [])
     except Exception as e:
-        print(f"  ⚠️  [Memory Retriever] Embedding failed: {e}")
+        logger.warning(f"  ⚠️  [Memory Retriever] Embedding failed: {e}")
         return []
 
 def _cosine_similarity(vec1: List[float], vec2: List[float]) -> float:
@@ -80,5 +81,5 @@ def retrieve_relevant(query: str, mem: dict, top_k: int = 3) -> dict:
             results[cat][k] = v
             valid_count += 1
             
-    print(f"  🧠 Retrieved {valid_count} relevant memories")
+    logger.debug(f"  🧠 Retrieved {valid_count} relevant memories")
     return results

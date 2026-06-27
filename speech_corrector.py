@@ -1,3 +1,4 @@
+import logger
 import re
 
 CORRECTIONS = {
@@ -31,8 +32,8 @@ def correct_transcript(text: str) -> str:
             corrected_text = re.sub(pattern, fix, corrected_text, flags=re.IGNORECASE)
             
     if original_text.lower() != corrected_text.lower() and original_text != corrected_text:
-        print(f"  🛠  STT Correction:")
-        print(f"      Before: {original_text}")
-        print(f"      After : {corrected_text}")
+        logger.debug(f"  🛠  STT Correction:")
+        logger.debug(f"      Before: {original_text}")
+        logger.debug(f"      After : {corrected_text}")
         
     return corrected_text

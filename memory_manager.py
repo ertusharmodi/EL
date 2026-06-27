@@ -3,6 +3,7 @@ import os
 from typing import Any, List, Literal, Union
 
 import config
+import logger
 
 _memory_cache = None
 
@@ -37,11 +38,11 @@ def load_memory() -> None:
                 if key not in _memory_cache or not isinstance(_memory_cache[key], dict):
                     _memory_cache[key] = {}
         except (json.JSONDecodeError, OSError) as exc:
-            print(f"  ⚠️   [Memory] Could not load long-term memory ({exc}) — starting fresh.")
+            logger.warning(f"  ⚠️   [Memory] Could not load long-term memory ({exc}) — starting fresh.")
             _memory_cache = dict(_DEFAULT_STRUCTURE)
             save_memory()
 
-    print(f"  🧠  [Memory] Loaded {len(_memory_cache)} categories")
+    logger.debug(f"  🧠  [Memory] Loaded {len(_memory_cache)} categories")
 
 
 def save_memory() -> None:
@@ -55,10 +56,10 @@ def save_memory() -> None:
     try:
         with open(path, "w", encoding="utf-8") as fh:
             json.dump(_memory_cache, fh, ensure_ascii=False, indent=2)
-        print(f"🧠 DEBUG: [8] Successfully wrote long_term.json to {path}")
+        logger.debug(f"🧠 DEBUG: [8] Successfully wrote long_term.json to {path}")
     except OSError as exc:
-        print(f"🧠 DEBUG: [8] Failed to write long_term.json: {exc}")
-        print(f"  ⚠️   [Memory] Could not save long-term memory ({exc}).")
+        logger.debug(f"🧠 DEBUG: [8] Failed to write long_term.json: {exc}")
+        logger.warning(f"  ⚠️   [Memory] Could not save long-term memory ({exc}).")
 
 
 def dedupe_list(items: List[str]) -> List[str]:
@@ -217,10 +218,10 @@ def apply_memory(
     if _norm(existing) == _norm(merged):
         return "unchanged"
         
-    print(f"  🧠 Merge Decision")
-    print(f"  Old Value: {existing}")
-    print(f"  New Value: {value}")
-    print(f"  Final Value: {merged}")
+    logger.debug(f"  🧠 Merge Decision")
+    logger.debug(f"  Old Value: {existing}")
+    logger.debug(f"  New Value: {value}")
+    logger.debug(f"  Final Value: {merged}")
     
     remember(category, key, merged)
     return "updated"
@@ -247,6 +248,68 @@ def forget(category: str, key: str) -> None:
     if isinstance(cur, dict):
         cur.pop(parts[-1], None)
         save_memory()
+
+def get_summary() -> str:
+    """Returns a formatted summary of all stored memories grouped by category."""
+    cache = _ensure_loaded()
+    if not cache:
+        return "I don't know anything about you yet."
+        
+    lines = []
+    
+    # Define a clean display name mapping for categories
+    cat_names = {
+        "personal": "Personal",
+        "preferences": "Preferences",
+        "relationships": "Relationships",
+        "goals": "Goals",
+        "projects": "Projects",
+        "skills": "Skills",
+        "facts": "Facts"
+    }
+    
+    def _format_key(k: str) -> str:
+        return k.replace("_", " ").title()
+        
+    def _format_val(v: Any) -> str:
+        if isinstance(v, list):
+            return ", ".join(str(i) for i in v)
+        return str(v)
+        
+    def _flatten_dict(d: dict, parent_key: str = '') -> dict:
+        items = {}
+        for k, v in d.items():
+            new_key = f"{parent_key} {k}" if parent_key else k
+            if isinstance(v, dict):
+                items.update(_flatten_dict(v, new_key))
+            else:
+                items[new_key] = v
+        return items
+
+    has_data = False
+    for cat, cat_dict in cache.items():
+        if not cat_dict:
+            continue
+            
+        flat_dict = _flatten_dict(cat_dict)
+        if not flat_dict:
+            continue
+            
+        has_data = True
+        display_cat = cat_names.get(cat, cat.title())
+        
+        # Add category header if lines is not empty (add newline)
+        if lines:
+            lines.append("")
+        # lines.append(f"{display_cat}:") # The user didn't want explicit headers in the example, but it's cleaner to group them logically. 
+        # Actually, let's just output the keys as requested in the example.
+        for k, v in flat_dict.items():
+            lines.append(f"{_format_key(k)}: {_format_val(v)}")
+            
+    if not has_data:
+        return "I don't know anything about you yet."
+        
+    return "\n".join(lines)
 
 
 def recall() -> dict:
@@ -298,7 +361,7 @@ def build_memory_context(user_query: str = "") -> str:
     if fact_count == 0:
         return ""
 
-    print(f"  🧠  [Memory] Injected {fact_count} facts into prompt")
+    logger.debug(f"  🧠  [Memory] Injected {fact_count} facts into prompt")
 
     context_str = "Known facts about the user:\n" + "\n".join(lines)
     return (

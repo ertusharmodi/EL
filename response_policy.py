@@ -16,10 +16,18 @@ def apply_policy(intent: str, user_text: str) -> Tuple[Optional[str], bool]:
     should_sleep = False
     response = None
 
-    if intent == "MEMORY_UPDATE":
-        # The fact extractor will still run quietly in the background,
-        # but we skip the LLM conversation response.
+    if intent == "MEMORY_REMEMBER":
         response = "Got it."
+        
+    elif intent == "MEMORY_UPDATE":
+        response = "Updated."
+        
+    elif intent == "MEMORY_FORGET":
+        response = "Forgotten."
+        
+    elif intent == "MEMORY_SUMMARY":
+        import memory_manager
+        response = memory_manager.get_summary()
         
     elif intent == "MEMORY_QUERY":
         ans = retriever.retrieve_direct_answer(user_text)
@@ -32,14 +40,7 @@ def apply_policy(intent: str, user_text: str) -> Tuple[Optional[str], bool]:
         
     elif intent == "THANKS":
         response = "You're welcome."
-        
-    elif intent == "TIME_QUERY":
-        from tools import datetime_tool
-        response = datetime_tool.execute("time")
-        
-    elif intent == "DATE_QUERY":
-        from tools import datetime_tool
-        response = datetime_tool.execute("date")
+
         
     elif intent == "IDENTITY_QUERY":
         if clean_msg == "who are you":

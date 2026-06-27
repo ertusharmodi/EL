@@ -6,6 +6,7 @@ from typing import Dict, Any
 
 import ollama
 import config
+import logger
 
 _state = {
     "current_topic": "",
@@ -52,7 +53,7 @@ def clear_context():
         "updated_at": ""
     }
     _turn_count = 0
-    print("🧠 Context Cleared")
+    logger.debug("🧠 Context Cleared")
 
 def update_context_async(user_msg: str, assistant_msg: str):
     global _turn_count
@@ -115,11 +116,12 @@ Required JSON format:
         _state["last_assistant_message"] = assistant_msg
         _state["updated_at"] = datetime.now().isoformat()
         
-        print("\n🧠 Context Updated")
-        print(f"🧠 Topic: {_state['current_topic']}")
+        logger.debug("\n🧠 Context Updated")
+        logger.debug(f"🧠 Topic: {_state['current_topic']}")
         for ent in _state["entities"]:
-            print(f"🧠 Entity: {ent.get('value')}")
+            logger.debug(f"🧠 Entity: {ent.get('value')}")
             
     except Exception as e:
+        logger.error(f"Context Error: {e}")
         # Silently fail if JSON parse fails to not interrupt the user
         pass

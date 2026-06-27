@@ -1,5 +1,5 @@
 from typing import Tuple, Optional
-from tools import calculator_tool, datetime_tool, system_tool
+from tools import calculator, datetime_tool, system_tool, app_launcher
 
 def route_tool(user_text: str) -> Tuple[Optional[str], Optional[str]]:
     """
@@ -13,9 +13,19 @@ def route_tool(user_text: str) -> Tuple[Optional[str], Optional[str]]:
     if sys_resp is not None:
         return "system", sys_resp
         
-    # 3. Calculator Tool
+    # 2. DateTime Tool
+    dt_resp = datetime_tool.execute(user_text)
+    if dt_resp is not None:
+        return "datetime", dt_resp
+        
+    # 3. App Launcher Tool
+    app_resp = app_launcher.execute(user_text)
+    if app_resp is not None:
+        return "app_launcher", app_resp
+        
+    # 4. Calculator Tool
     # Evaluate math last to avoid intercepting legitimate sentences that happen to have numbers/dashes
-    calc_resp = calculator_tool.execute(user_text)
+    calc_resp = calculator.execute(user_text)
     if calc_resp is not None:
         return "calculator", calc_resp
         

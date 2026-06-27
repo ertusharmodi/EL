@@ -17,6 +17,7 @@ from dotenv import load_dotenv
 from elevenlabs.client import ElevenLabs
 
 import config
+import logger
 
 # ── Load .env once at import time ──────────────────────────────────────────
 # dotenv does not overwrite variables that are already in the environment,
@@ -39,7 +40,7 @@ def _get_client() -> ElevenLabs:
                 "Set ELEVENLABS_API_KEY in .env or as an environment variable."
             )
         _client = ElevenLabs(api_key=api_key)
-        print("  ✅  ElevenLabs client ready.")
+        logger.debug("  ✅  ElevenLabs client ready.")
     return _client
 
 
@@ -86,11 +87,11 @@ def speak(text: str, output_path: str = config.RESPONSE_WAV) -> str:
     # Derive sample rate from the format string ("pcm_44100" → 44100)
     sample_rate = int(fmt.split("_")[1])
 
-    print(
+    logger.debug(
         f"  📝  TTS input: {len(text)} chars — "
         f"\"{text[:80]}{'...' if len(text) > 80 else ''}\""
     )
-    print(f"  🔊  ElevenLabs → voice={voice_id}  model={model_id}  fmt={fmt}")
+    logger.debug(f"  🔊  ElevenLabs → voice={voice_id}  model={model_id}  fmt={fmt}")
 
     # Stream audio from ElevenLabs
     audio_stream = client.text_to_speech.convert(
@@ -111,14 +112,14 @@ def speak(text: str, output_path: str = config.RESPONSE_WAV) -> str:
     if not chunks:
         # Fallback: 500ms of silence (int16 zeros) so audio.play() never
         # receives a broken file.
-        print("  ⚠️   No audio received — using silence fallback.")
+        logger.warning("  ⚠️   No audio received — using silence fallback.")
         silence_samples = int(0.5 * sample_rate)
         chunks = [b"\x00\x00" * silence_samples]
         total_bytes = len(chunks[0])
 
     pcm_bytes = b"".join(chunks)
     duration  = total_bytes / (sample_rate * 2)   # 2 bytes per int16 sample
-    print(
+    logger.debug(
         f"  📊  Total: {len(chunks)} chunk(s) · {total_bytes:,} bytes "
         f"· {duration:.2f}s @ {sample_rate} Hz"
     )
@@ -128,5 +129,5 @@ def speak(text: str, output_path: str = config.RESPONSE_WAV) -> str:
     with open(output_path, "wb") as fh:
         fh.write(wav_bytes)
 
-    print(f"  ✅  Saved WAV → {output_path}")
+    logger.debug(f"  ✅  Saved WAV → {output_path}")
     return output_path

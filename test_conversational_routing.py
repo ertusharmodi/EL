@@ -16,24 +16,28 @@ class TestConversationalRouting(unittest.TestCase):
         # 1. GOODBYE
         self.assertEqual(intent_classifier.classify_intent("bye"), "GOODBYE")
         self.assertEqual(intent_classifier.classify_intent("see you"), "GOODBYE")
-        
-        # 2. TIME_QUERY
-        self.assertEqual(intent_classifier.classify_intent("what time is it"), "TIME_QUERY")
-        self.assertEqual(intent_classifier.classify_intent("current time"), "TIME_QUERY")
-        
-        # 3. DATE_QUERY
-        self.assertEqual(intent_classifier.classify_intent("today's date"), "DATE_QUERY")
+
         
         # 4. MEMORY_QUERY
         self.assertEqual(intent_classifier.classify_intent("what is my favorite framework?"), "MEMORY_QUERY")
         self.assertEqual(intent_classifier.classify_intent("what's my name"), "MEMORY_QUERY")
         self.assertEqual(intent_classifier.classify_intent("who is my best friend"), "MEMORY_QUERY")
         
-        # 5. MEMORY_UPDATE
-        self.assertEqual(intent_classifier.classify_intent("my favorite color is black"), "MEMORY_UPDATE")
-        self.assertEqual(intent_classifier.classify_intent("remember this: i like apples"), "MEMORY_UPDATE")
+        # 5. MEMORY_REMEMBER
+        self.assertEqual(intent_classifier.classify_intent("remember that my favorite bike is Royal Enfield Himalayan"), "MEMORY_REMEMBER")
+        self.assertEqual(intent_classifier.classify_intent("remember this: i like apples"), "MEMORY_REMEMBER")
         
-        # 6. IDENTITY_QUERY
+        # 5b. MEMORY_UPDATE
+        self.assertEqual(intent_classifier.classify_intent("update my favorite color to red"), "MEMORY_UPDATE")
+        self.assertEqual(intent_classifier.classify_intent("change my name to john"), "MEMORY_UPDATE")
+        
+        # 5c. MEMORY_FORGET
+        self.assertEqual(intent_classifier.classify_intent("forget my favorite color"), "MEMORY_FORGET")
+        self.assertEqual(intent_classifier.classify_intent("delete my history"), "MEMORY_FORGET")
+        
+        # 5d. MEMORY_SUMMARY
+        self.assertEqual(intent_classifier.classify_intent("what do you know about me"), "MEMORY_SUMMARY")
+        self.assertEqual(intent_classifier.classify_intent("list my preferences"), "MEMORY_SUMMARY")
         self.assertEqual(intent_classifier.classify_intent("who are you"), "IDENTITY_QUERY")
         self.assertEqual(intent_classifier.classify_intent("what's your name"), "IDENTITY_QUERY")
         self.assertEqual(intent_classifier.classify_intent("what are you doing"), "IDENTITY_QUERY")
@@ -49,17 +53,7 @@ class TestConversationalRouting(unittest.TestCase):
 
     # ── 2. Response Policy Determinstic Mappings ──
 
-    @patch('tools.datetime_tool.execute')
-    def test_time_date_policy(self, mock_dt):
-        mock_dt.return_value = "It's 10:00 AM."
-        resp, _ = response_policy.apply_policy("TIME_QUERY", "what time is it")
-        self.assertEqual(resp, "It's 10:00 AM.")
-        mock_dt.assert_called_with("time")
-        
-        mock_dt.return_value = "Today is Monday."
-        resp2, _ = response_policy.apply_policy("DATE_QUERY", "today's date")
-        self.assertEqual(resp2, "Today is Monday.")
-        mock_dt.assert_called_with("date")
+
         
     def test_identity_policy(self):
         resp, _ = response_policy.apply_policy("IDENTITY_QUERY", "who are you")
@@ -78,9 +72,26 @@ class TestConversationalRouting(unittest.TestCase):
         self.assertEqual(resp, "Laravel.")
         self.assertFalse(sleep)
 
-    def test_memory_update_policy(self):
-        resp, sleep = response_policy.apply_policy("MEMORY_UPDATE", "I like apples")
+    def test_memory_remember_policy(self):
+        resp, sleep = response_policy.apply_policy("MEMORY_REMEMBER", "I like apples")
         self.assertEqual(resp, "Got it.")
+        self.assertFalse(sleep)
+        
+    def test_memory_update_policy(self):
+        resp, sleep = response_policy.apply_policy("MEMORY_UPDATE", "change my favorite color to red")
+        self.assertEqual(resp, "Updated.")
+        self.assertFalse(sleep)
+        
+    def test_memory_forget_policy(self):
+        resp, sleep = response_policy.apply_policy("MEMORY_FORGET", "forget my favorite color")
+        self.assertEqual(resp, "Forgotten.")
+        self.assertFalse(sleep)
+        
+    @patch('memory_manager.get_summary')
+    def test_memory_summary_policy(self, mock_summary):
+        mock_summary.return_value = "Name: John"
+        resp, sleep = response_policy.apply_policy("MEMORY_SUMMARY", "what do you know about me")
+        self.assertEqual(resp, "Name: John")
         self.assertFalse(sleep)
         
     def test_goodbye_policy(self):

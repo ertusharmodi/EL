@@ -11,14 +11,7 @@ def classify_intent(text: str) -> str:
     # 1. GOODBYE
     if clean_text in ("bye", "goodbye", "see you", "good night"):
         return "GOODBYE"
-        
-    # 2. TIME_QUERY
-    if clean_text in ("what's time", "what time is it", "tell me time", "current time", "what is the time"):
-        return "TIME_QUERY"
-        
-    # 3. DATE_QUERY
-    if clean_text in ("today's date", "current date", "what is today's date", "what is the date"):
-        return "DATE_QUERY"
+
         
     # 4. MEMORY_QUERY
     memory_query_prefixes = (
@@ -28,13 +21,34 @@ def classify_intent(text: str) -> str:
     if any(clean_text.startswith(prefix) for prefix in memory_query_prefixes):
         return "MEMORY_QUERY"
         
-    # 5. MEMORY_UPDATE
+    # 5. MEMORY_SUMMARY
+    summary_prefixes = (
+        "what do you know about me", "list my preferences", "summarize my memory", "what is my summary",
+        "do you know me", "do you know who i am", "who am i"
+    )
+    if clean_text in summary_prefixes or any(clean_text.startswith(prefix) for prefix in summary_prefixes):
+        return "MEMORY_SUMMARY"
+        
+    # 6. MEMORY_REMEMBER
+    remember_prefixes = (
+        "remember that", "remember this", "my goal is", "i was born", "my birthplace is"
+    )
+    if any(clean_text.startswith(prefix) for prefix in remember_prefixes):
+        return "MEMORY_REMEMBER"
+        
+    # 7. MEMORY_UPDATE
     update_prefixes = (
-        "remember this", "my favorite", "i like", "i love", 
-        "i prefer", "my goal is", "i was born", "my birthplace is"
+        "update my", "change my", "my favorite", "i like", "i love", "i prefer"
     )
     if any(clean_text.startswith(prefix) for prefix in update_prefixes):
         return "MEMORY_UPDATE"
+        
+    # 8. MEMORY_FORGET
+    forget_prefixes = (
+        "forget my", "forget that", "delete my"
+    )
+    if any(clean_text.startswith(prefix) for prefix in forget_prefixes):
+        return "MEMORY_FORGET"
         
     # 6. IDENTITY_QUERY
     if clean_text in ("who are you", "what's your name", "what is your name", "what are you doing"):

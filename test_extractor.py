@@ -218,6 +218,8 @@ class TestRunExtractionAndSave(unittest.TestCase):
     """Persistence, STT gating, confidence gating, deduplication, updates."""
 
     def setUp(self):
+        import logger
+        logger.set_level(logger.DEBUG)
         self._tmpdir = tempfile.TemporaryDirectory()
         self._memory_file = os.path.join(self._tmpdir.name, "long_term.json")
         self._patcher = patch.object(config, "MEMORY_LONG_TERM_FILE", self._memory_file)
@@ -346,6 +348,32 @@ class TestRunExtractionAndSave(unittest.TestCase):
             memory_manager.get_value("personal", "birthplace"),
             "Harmangrad Rajasthan",
         )
+
+    @patch("llm_extractor.extract_memories_llm")
+    def test_delete_action_forgets_memory(self, mock_llm):
+        # Pre-populate memory
+        memory_manager.remember("preferences", "favorite_color", "black")
+        self.assertEqual(memory_manager.get_value("preferences", "favorite_color"), "black")
+
+        # Mock LLM returning an explicit delete action
+        mock_llm.return_value = [
+            {
+                "action": "delete",
+                "category": "preferences",
+                "key": "favorite_color",
+                "value": "",
+                "confidence": 0.95,
+                "source": "llm",
+            }
+        ]
+        
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            extractor.run_extraction_and_save("Forget my favorite color.", stt_confidence=1.0)
+            
+        output = buf.getvalue()
+        self.assertIn("Forgotten Memory", output)
+        self.assertIsNone(memory_manager.get_value("preferences", "favorite_color"))
 
 
 if __name__ == "__main__":

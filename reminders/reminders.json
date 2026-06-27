@@ -1,0 +1,32 @@
+{
+  "reminders": [
+    {
+      "id": "b9745315-bfba-4ceb-b1ca-e798e16ac694",
+      "title": "drink water.",
+      "created_at": "2026-06-21T16:49:53.492165",
+      "due_at": "2026-06-21T16:50:53.491983",
+      "completed": true
+    },
+    {
+      "id": "aea5d13d-773e-4ce3-9580-d6c60a64fe30",
+      "title": "take mobile.",
+      "created_at": "2026-06-21T16:51:22.395599",
+      "due_at": "2026-06-21T16:51:52.395342",
+      "completed": true
+    },
+    {
+      "id": "b87391d2-10b7-4aee-b0a5-7c0531d344e6",
+      "title": "drink water.",
+      "created_at": "2026-06-21T16:56:24.157556",
+      "due_at": "2026-06-21T16:57:24.157331",
+      "completed": true
+    },
+    {
+      "id": "730c417b-9f70-44a7-bd77-d793edef1782",
+      "title": "drink water.",
+      "created_at": "2026-06-21T17:01:49.531188",
+      "due_at": "2026-06-21T17:02:09.530978",
+      "completed": true
+    }
+  ]
+}

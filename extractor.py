@@ -12,6 +12,7 @@ from typing import Any, Dict, List, Union
 
 import config
 import llm_extractor
+import logger
 import memory_manager
 import regex_extractor
 
@@ -52,10 +53,10 @@ def _merge_extractions(
             new_val = mem["value"]
             final_val = memory_manager.merge_values(mem["category"], mem["key"], old_val, new_val)
             if final_val != old_val:
-                print("  🧠 Merge Decision")
-                print(f"  Old Value: {old_val}")
-                print(f"  New Value: {new_val}")
-                print(f"  Final Value: {final_val}")
+                logger.debug("  🧠 Merge Decision")
+                logger.debug(f"  Old Value: {old_val}")
+                logger.debug(f"  New Value: {new_val}")
+                logger.debug(f"  Final Value: {final_val}")
             merged[slot]["value"] = final_val
         else:
             merged[slot] = mem
@@ -72,10 +73,10 @@ def _merge_extractions(
             final_val = memory_manager.merge_values(mem["category"], mem["key"], old_val, new_val)
             
             if final_val != old_val:
-                print("  🧠 Merge Decision")
-                print(f"  Old Value: {old_val}")
-                print(f"  New Value: {new_val}")
-                print(f"  Final Value: {final_val}")
+                logger.debug("  🧠 Merge Decision")
+                logger.debug(f"  Old Value: {old_val}")
+                logger.debug(f"  New Value: {new_val}")
+                logger.debug(f"  Final Value: {final_val}")
                 
             merged[slot]["value"] = final_val
             
@@ -108,48 +109,54 @@ def run_extraction_and_save(
     Skips all saves when STT confidence is below MEMORY_STT_MIN_CONFIDENCE.
     Only saves memories whose extraction confidence >= MEMORY_LLM_MIN_CONFIDENCE.
     """
-    print(f"🧠 DEBUG: [1] User message received: '{user_message}'")
-    print(f"🧠 DEBUG: [2] STT confidence: {stt_confidence}")
+    logger.debug(f"🧠 DEBUG: [1] User message received: '{user_message}'")
+    logger.debug(f"🧠 DEBUG: [2] STT confidence: {stt_confidence}")
 
     if stt_confidence < config.MEMORY_STT_MIN_CONFIDENCE:
-        print("  ⚠️ Memory save skipped due to low STT confidence")
+        logger.debug("  ⚠️ Memory save skipped due to low STT confidence")
         return
 
     regex_mems = regex_extractor.extract_memories_regex(user_message)
-    print(f"🧠 DEBUG: [3] Regex extraction result: {regex_mems}")
+    logger.debug(f"🧠 DEBUG: [3] Regex extraction result: {regex_mems}")
 
     llm_mems = llm_extractor.extract_memories_llm(user_message, already_extracted=regex_mems)
-    print(f"🧠 DEBUG: [4] LLM extraction result: {llm_mems}")
+    logger.debug(f"🧠 DEBUG: [4] LLM extraction result: {llm_mems}")
 
     memories = _merge_extractions(regex_mems, llm_mems)
-    print(f"🧠 DEBUG: [5] Merged memories: {memories}")
+    logger.debug(f"🧠 DEBUG: [5] Merged memories: {memories}")
 
     if not memories:
         return
 
     for mem in memories:
+        action_type = mem.get("action", "save")
         cat = mem["category"]
         key = mem["key"]
         val = mem["value"]
         confidence = float(mem.get("confidence", 0.0))
         source = mem.get("source", "unknown")
-        display = _format_value(val)
+        display = _format_value(val) if val else ""
 
-        print(f"  🧠  Extracted Memory\n  {cat}.{key} = {display}")
-        print(f"  🧠  Confidence: {confidence:.0%} ({source})")
+        logger.debug(f"  🧠  Extracted Memory ({action_type})\n  {cat}.{key} = {display}")
+        logger.debug(f"  🧠  Confidence: {confidence:.0%} ({source})")
 
-        print(f"🧠 DEBUG: [6] Confidence filtering: {confidence} >= {config.MEMORY_LLM_MIN_CONFIDENCE}")
+        logger.debug(f"🧠 DEBUG: [6] Confidence filtering: {confidence} >= {config.MEMORY_LLM_MIN_CONFIDENCE}")
         if not _passes_confidence(mem):
-            print(f"  ⚠️   Skipped — confidence below {config.MEMORY_LLM_MIN_CONFIDENCE:.0%}")
+            logger.debug(f"  ⚠️   Skipped — confidence below {config.MEMORY_LLM_MIN_CONFIDENCE:.0%}")
             continue
 
-        print(f"🧠 DEBUG: [7] Memory save operation started for {cat}.{key} = {val}")
-        action = memory_manager.apply_memory(cat, key, val)
-        print(f"🧠 DEBUG: [7] Memory save operation returned action: {action}")
+        if action_type == "delete":
+            logger.debug(f"🧠 DEBUG: [7] Memory delete operation started for {cat}.{key}")
+            memory_manager.forget(cat, key)
+            logger.info(f"  🧠  Forgotten Memory\n  {cat}.{key}")
+        else:
+            logger.debug(f"🧠 DEBUG: [7] Memory save operation started for {cat}.{key} = {val}")
+            action_result = memory_manager.apply_memory(cat, key, val)
+            logger.debug(f"🧠 DEBUG: [7] Memory save operation returned action: {action_result}")
 
-        if action == "saved":
-            print(f"  🧠  Saved Memory\n  {cat}.{key} = {display}")
-        elif action == "updated":
-            print(f"  🧠  Updated Memory\n  {cat}.{key} = {display}")
-        elif action == "unchanged":
-            print(f"  🧠  Unchanged Memory (Already known)\n  {cat}.{key} = {display}")
+            if action_result == "saved":
+                logger.info(f"  🧠  Saved Memory\n  {cat}.{key} = {display}")
+            elif action_result == "updated":
+                logger.info(f"  🧠  Updated Memory\n  {cat}.{key} = {display}")
+            elif action_result == "unchanged":
+                logger.debug(f"  🧠  Unchanged Memory (Already known)\n  {cat}.{key} = {display}")

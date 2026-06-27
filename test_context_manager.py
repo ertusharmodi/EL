@@ -1,7 +1,5 @@
 import unittest
 from unittest.mock import patch, MagicMock
-import sys
-sys.modules['ollama'] = MagicMock()
 
 import context_manager
 
@@ -28,7 +26,7 @@ class TestContextManager(unittest.TestCase):
         self.assertIn("Current Topic: bike", prompt)
         self.assertIn("Recent Entity (motorcycle): Royal Enfield", prompt)
         
-    @patch('ollama.chat')
+    @patch('context_manager.ollama.chat')
     def test_run_llm_extraction(self, mock_ollama_chat):
         # Mock the ollama response
         mock_response = {

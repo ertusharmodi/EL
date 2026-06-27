@@ -17,6 +17,7 @@ import time
 import ollama
 
 import config
+import logger
 import memory
 import memory_manager
 
@@ -93,7 +94,7 @@ def chat(user_text: str) -> str:
     
     # Prepend short-term history.
     hist = memory.get_history()
-    print(f"  🧠  [MEMORY] context size: {len(hist) // 2} turns")
+    logger.debug(f"  🧠  [MEMORY] context size: {len(hist) // 2} turns")
 
     response = ollama.chat(
         model=config.OLLAMA_MODEL,
@@ -136,12 +137,12 @@ def chat(user_text: str) -> str:
         eval_secs      = response.eval_duration / 1e9
         prompt_tok     = response.prompt_eval_count
         tps            = eval_tokens / eval_secs if eval_secs > 0 else 0
-        print(
+        logger.debug(
             f"  🧠  [LLM] {elapsed:.1f}s  |  "
             f"prompt={prompt_tok}tok  gen={eval_tokens}tok @ {tps:.0f}tok/s  "
             f"thinking={think_chars}chars"
         )
     except Exception:
-        print(f"  🧠  [LLM] {elapsed:.1f}s")
+        logger.debug(f"  🧠  [LLM] {elapsed:.1f}s")
 
     return content

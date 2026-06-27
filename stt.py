@@ -16,6 +16,7 @@ import soundfile as sf
 from faster_whisper import WhisperModel
 
 import config
+import logger
 
 # Suppress NumPy RuntimeWarnings that leak from Faster-Whisper's mel
 # spectrogram computation (divide-by-zero / overflow / invalid in matmul).
@@ -45,12 +46,12 @@ def _get_model() -> WhisperModel:
     global _model
     if _model is None:
         import traceback
-        print("  ⏳  Starting Whisper initialization...")
-        print(f"       model      : {config.WHISPER_MODEL}")
-        print(f"       device     : {config.WHISPER_DEVICE}")
-        print(f"       compute    : {config.WHISPER_COMPUTE}")
-        print(f"       cache dir  : ~/.cache/huggingface/hub")
-        print("       Creating WhisperModel instance...")
+        logger.debug("  ⏳  Starting Whisper initialization...")
+        logger.debug(f"       model      : {config.WHISPER_MODEL}")
+        logger.debug(f"       device     : {config.WHISPER_DEVICE}")
+        logger.debug(f"       compute    : {config.WHISPER_COMPUTE}")
+        logger.debug(f"       cache dir  : ~/.cache/huggingface/hub")
+        logger.debug("       Creating WhisperModel instance...")
         try:
             _model = WhisperModel(
                 config.WHISPER_MODEL,
@@ -58,10 +59,10 @@ def _get_model() -> WhisperModel:
                 compute_type=config.WHISPER_COMPUTE,
             )
         except Exception:
-            print("\n  ❌  Whisper initialization failed:")
+            logger.error("\n  ❌  Whisper initialization failed:")
             traceback.print_exc()
             raise
-        print("  ✅  Whisper initialization completed.")
+        logger.debug("  ✅  Whisper initialization completed.")
     return _model
 
 
@@ -132,7 +133,7 @@ def transcribe(wav_path: str) -> TranscriptionResult:
         segment_confidences.append(seg_conf)
         is_low = seg_conf < config.WHISPER_SEGMENT_CONFIDENCE_THRESHOLD
 
-        print(
+        logger.debug(
             f"  🎙  Segment {i+1}: conf={seg_conf:.0%}  "
             f"no_speech={seg.no_speech_prob:.2f}  "
             f"{'⚠️  LOW CONFIDENCE' if is_low else ''}  "
@@ -150,17 +151,17 @@ def transcribe(wav_path: str) -> TranscriptionResult:
     # Summary line: overall language confidence + low-confidence warning
     lang_conf = info.language_probability
     if low_confidence_flags:
-        print(
+        logger.warning(
             f"  ⚠️   Low-confidence segment(s) detected — "
             f"transcription may contain errors. "
             f"Flagged: {low_confidence_flags}"
         )
-        print(
+        logger.warning(
             f"  🎯  Transcribed ({lang_conf:.0%} language confidence, "
             f"{overall_confidence:.0%} min segment) [REVIEW ADVISED]"
         )
     else:
-        print(
+        logger.debug(
             f"  🎯  Transcribed ({lang_conf:.0%} language confidence, "
             f"{overall_confidence:.0%} min segment)"
         )

@@ -1,3 +1,4 @@
+import logger
 import re
 from typing import List, Dict
 
@@ -37,9 +38,9 @@ def resolve_context(user_text: str, history: List[Dict[str, str]]) -> str:
 
     # Print logs if a resolution occurred
     if resolved_text.lower() != original_text.lower():
-        print("  🧠  Context Resolution")
-        print(f"      Original: {original_text}")
-        print(f"      Resolved: {resolved_text}")
+        logger.debug("  🧠  Context Resolution")
+        logger.debug(f"      Original: {original_text}")
+        logger.debug(f"      Resolved: {resolved_text}")
         return resolved_text
 
     return original_text
